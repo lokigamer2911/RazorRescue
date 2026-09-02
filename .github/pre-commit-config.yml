@@ -1,0 +1,18 @@
+# Pre-commit security checks
+# Run manually: cat .github/pre-commit-config.yml | bash
+
+echo "🔍 Running pre-commit security checks..."
+
+# Check for secrets
+if grep -r "sk-or-v1\|sk_live\|sk_test\|password\s*=" --include="*.js" --include="*.jsx" --include="*.json" . 2>/dev/null | grep -v node_modules | grep -v ".env.example"; then
+  echo "❌ Potential secrets found in code! Aborting commit."
+  exit 1
+fi
+
+# Check .env not staged
+if git diff --cached --name-only | grep -q "^\.env$"; then
+  echo "❌ .env file is staged for commit! Remove it with: git reset HEAD .env"
+  exit 1
+fi
+
+echo "✅ Pre-commit checks passed"

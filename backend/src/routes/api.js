@@ -1,42 +1,63 @@
 import { Router } from 'express';
 import { chatCompletion } from '../services/openrouter.js';
 import { generateIncident, generateTransactions, analyseTransactions } from '../services/simulation.js';
+import { validate, aiLimiter } from '../middleware/security.js';
 
 export const router = Router();
 
-// AI spiderweb consultation
-router.post('/consult', async (req, res) => {
+// AI spiderweb consultation — strict rate limit + validation
+router.post('/consult', aiLimiter, validate('consult'), async (req, res) => {
   try {
-    const { prompt, systemPrompt, model, context } = req.body;
-    const result = await chatCompletion(prompt, systemPrompt, model);
+    const { prompt, model } = req.body;
+    // System prompt is NEVER taken from user input — prevents injection
+    const result = await chatCompletion(prompt, null, model);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[AI Consult]', err.message);
+    res.status(502).json({ error: 'AI service temporarily unavailable' });
   }
 });
 
-// Generate transaction data
-router.post('/generate-transactions', (req, res) => {
-  const { count, options } = req.body;
-  const transactions = generateTransactions(count || 10000, options || {});
-  res.json({ transactions, count: transactions.length });
+// Generate transaction data — validated count
+router.post('/generate-transactions', validate('generateTransactions'), (req, res) => {
+  try {
+    const { count, options } = req.body;
+    const transactions = generateTransactions(count || 10000, options || {});
+    res.json({ transactions, count: transactions.length });
+  } catch {
+    res.status(500).json({ error: 'Failed to generate transactions' });
+  }
 });
 
 // Analyse transactions
 router.post('/analyse', (req, res) => {
-  const { transactions } = req.body;
-  const analysis = analyseTransactions(transactions);
-  res.json(analysis);
+  try {
+    const { transactions } = req.body;
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return res.status(400).json({ error: 'transactions must be a non-empty array' });
+    }
+    if (transactions.length > 100000) {
+      return res.status(400).json({ error: 'Maximum 100,000 transactions per analysis' });
+    }
+    const analysis = analyseTransactions(transactions);
+    res.json(analysis);
+  } catch {
+    res.status(500).json({ error: 'Analysis failed' });
+  }
 });
 
-// Generate incident
-router.post('/generate-incident', (req, res) => {
-  const { type, severity, transactionCount } = req.body;
-  const incident = generateIncident(type, severity, transactionCount || 10000);
-  res.json(incident);
+// Generate incident — validated
+router.post('/generate-incident', validate('generateIncident'), (req, res) => {
+  try {
+    const { type, severity, transactionCount } = req.body;
+    const incident = generateIncident(type, severity, transactionCount || 10000);
+    res.json(incident);
+  } catch {
+    res.status(500).json({ error: 'Failed to generate incident' });
+  }
 });
 
-// Get available models
+// Get available models (read-only, no validation needed)
 router.get('/models', (_req, res) => {
   res.json([
     { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', role: 'Chief Analyst' },
