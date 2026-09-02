@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { @apply border-white/[0.06]; }
+  
+  body {
+    @apply bg-surface-0 text-white font-sans antialiased;
+    overflow: hidden;
+  }
+
+  ::selection {
+    @apply bg-accent/30 text-white;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-white/20; }
+}
+
+@layer components {
+  /* Glass Card */
+  .glass {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl;
+    box-shadow: 
+      0 0 0 1px rgba(255,255,255,0.03) inset,
+      0 1px 0 0 rgba(255,255,255,0.05) inset,
+      0 20px 60px -10px rgba(0,0,0,0.5);
+  }
+
+  .glass-hover {
+    @apply glass transition-all duration-300;
+  }
+  .glass-hover:hover {
+    @apply border-white/[0.12] bg-white/[0.05];
+    box-shadow: 
+      0 0 0 1px rgba(255,255,255,0.05) inset,
+      0 1px 0 0 rgba(255,255,255,0.08) inset,
+      0 30px 80px -10px rgba(0,0,0,0.6),
+      0 0 40px rgba(99,102,241,0.08);
+  }
+
+  /* Gradient Text */
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #fff 0%, #818cf8 50%, #6366f1 100%);
+  }
+
+  .gradient-text-success {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  }
+
+  .gradient-text-danger {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #fb7185 0%, #f43f5e 100%);
+  }
+
+  /* Shimmer Effect */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0.05) 50%,
+      rgba(255,255,255,0) 100%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+
+  /* Glow Effects */
+  .glow-accent {
+    box-shadow: 0 0 30px rgba(99,102,241,0.15), 0 0 60px rgba(99,102,241,0.05);
+  }
+
+  .glow-success {
+    box-shadow: 0 0 30px rgba(16,185,129,0.15), 0 0 60px rgba(16,185,129,0.05);
+  }
+
+  .glow-danger {
+    box-shadow: 0 0 30px rgba(244,63,94,0.15), 0 0 60px rgba(244,63,94,0.05);
+  }
+
+  /* Noise Texture Overlay */
+  .noise::before {
+    content: '';
+    @apply absolute inset-0 opacity-[0.015] pointer-events-none rounded-2xl;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }
+
+  /* Animated Gradient Border */
+  .border-gradient {
+    position: relative;
+  }
+  .border-gradient::before {
+    content: '';
+    @apply absolute inset-0 rounded-2xl p-[1px];
+    background: linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.1), rgba(16,185,129,0.3));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Pulse Dot */
+  .pulse-dot {
+    @apply relative;
+  }
+  .pulse-dot::before {
+    content: '';
+    @apply absolute -left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald;
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+
+  /* Grid Pattern */
+  .grid-pattern {
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  /* Radial Glow Background */
+  .radial-glow {
+    background: radial-gradient(ellipse at center, rgba(99,102,241,0.08) 0%, transparent 70%);
+  }
+
+  /* Card with inner highlight */
+  .card-highlight {
+    @apply glass relative overflow-hidden;
+  }
+  .card-highlight::after {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-[1px];
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  
+  /* Stagger animation delays */
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+  .stagger-5 { animation-delay: 0.5s; }
+}
+
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+}
