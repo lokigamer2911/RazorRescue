@@ -12,7 +12,7 @@ const MODES = [
 ];
 
 export default function Recovery() {
-  const { autopilotMode, setAutopilotMode, addTimelineEntry, recoveryData, setRecoveryData, recoveryActive, setRecoveryActive } = useAppState();
+  const { autopilotMode, setAutopilotMode, addTimelineEntry, recoveryData, setRecoveryData, recoveryActive, setRecoveryActive, saveCampaign, saveAction, activeIncident } = useAppState();
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Ready');
   const cardsRef = useRef(null);
@@ -29,6 +29,11 @@ export default function Recovery() {
     setRecoveryActive(true);
     setStatus('Initializing');
     addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🚀', title: 'Recovery campaign started', desc: 'Multi-channel recovery for 312 customers', type: 'info' });
+
+    // Save to backend
+    saveCampaign({ incidentId: activeIncident?.id || null, status: 'running', customersContacted: 0, paymentsRecovered: 0, amountRecovered: 0, recoveryRate: 0, startedAt: new Date().toISOString() });
+    saveAction({ type: 'recovery', title: 'Recovery campaign launched', description: 'Sending payment links to 312 eligible customers', riskLevel: 'low', status: 'completed' });
+
     const total = 312;
     let contacted = 0, recovered = 0, amount = 0;
     for (let i = 0; i < 12; i++) {
@@ -44,6 +49,10 @@ export default function Recovery() {
     }
     setStatus('Complete');
     addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🎉', title: `Complete — ${formatCurrency(amount)} recovered`, desc: `Rate: ${Math.round((recovered / total) * 100)}%`, type: 'success' });
+
+    // Save final state
+    saveCampaign({ incidentId: activeIncident?.id || null, status: 'complete', customersContacted: contacted, paymentsRecovered: recovered, amountRecovered: amount, recoveryRate: Math.round((recovered / total) * 100), completedAt: new Date().toISOString() });
+    saveAction({ type: 'recovery-complete', title: `Recovery complete: ${formatCurrency(amount)}`, description: `${recovered}/${total} customers responded`, riskLevel: 'low', status: 'completed', revenueRecovered: amount });
   };
 
   const perms = {
@@ -61,7 +70,6 @@ export default function Recovery() {
       </h2>
       <p className="text-[13px] text-white/25 mb-6 reveal-card" style={{ opacity: 0 }}>Monitor and manage active recovery campaigns</p>
 
-      {/* Campaign */}
       <div className="card-glass p-6 mb-5 reveal-card noise" style={{ opacity: 0 }}>
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-[15px] font-bold text-white/85">Campaign: UPI Failure Incident</h3>
@@ -84,13 +92,12 @@ export default function Recovery() {
           ))}
         </div>
         <button onClick={launch} disabled={recoveryActive && status === 'Running'}
-          className={clsx('w-full py-4 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-2', status === 'Complete' ? 'btn-glow-green' : 'btn-glow-green', (recoveryActive && status === 'Running') && 'opacity-60 cursor-not-allowed')}>
+          className={clsx('w-full py-4 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-2 btn-glow-green', (recoveryActive && status === 'Running') && 'opacity-60 cursor-not-allowed')}>
           <Rocket className="w-4 h-4" />
           {status === 'Ready' ? 'Launch Recovery Campaign' : status === 'Complete' ? '✅ Complete' : `${status}...`}
         </button>
       </div>
 
-      {/* Autopilot */}
       <div className="card-glass p-6 mb-5 reveal-card noise" style={{ opacity: 0 }}>
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <div className="flex items-center gap-2">
