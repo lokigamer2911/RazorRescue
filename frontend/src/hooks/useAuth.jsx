@@ -8,6 +8,7 @@ import {
   RecaptchaVerifier,
   sendPasswordResetEmail,
   sendEmailVerification,
+  applyActionCode,
   updateProfile,
   signOut,
   onAuthStateChanged,
@@ -34,6 +35,17 @@ export function normalizePhone(value) {
   if (/^0[0-9]{10}$/.test(v)) return `+91${v.slice(1)}`;
   if (/^\+?[0-9]{10,15}$/.test(v)) return v.startsWith('+') ? v : `+${v}`;
   return v;
+}
+
+/**
+ * Verification emails land back inside the app (?mode=verifyEmail&oobCode=…)
+ * instead of a generic Firebase page, so the verify → dashboard loop completes
+ * without leaving the product. Requires the current origin in Firebase's
+ * authorized domains (localhost is pre-approved; add 127.0.0.1 for previews).
+ */
+function verificationActionCodeSettings() {
+  if (typeof window === 'undefined') return undefined;
+  return { url: `${window.location.origin}/`, handleCodeInApp: true };
 }
 
 const ERROR_MESSAGES = {
@@ -104,7 +116,7 @@ export function AuthProvider({ children }) {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     const u = credential.user;
     if (name?.trim()) await updateProfile(u, { displayName: name.trim() });
-    await sendEmailVerification(u);
+    await sendEmailVerification(u, verificationActionCodeSettings());
     return u;
   }, [requireAuth]);
 
@@ -128,7 +140,7 @@ export function AuthProvider({ children }) {
   const resendVerification = useCallback(async () => {
     requireAuth();
     if (!auth.currentUser) return;
-    await sendEmailVerification(auth.currentUser);
+    await sendEmailVerification(auth.currentUser, verificationActionCodeSettings());
   }, [requireAuth]);
 
   /**
@@ -210,6 +222,31 @@ export function AuthProvider({ children }) {
     return result.user;
   }, []);
 
+  /**
+   * Runs when the app opens from an email-verification link
+   * (?mode=verifyEmail&oobCode=…): confirms the code with Firebase, cleans the
+   * URL, and refreshes the signed-in user so emailVerified flips to true.
+   */
+  const processVerificationLink = useCallback(async () => {
+    if (!auth || typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') !== 'verifyEmail') return false;
+    const code = params.get('oobCode');
+    if (!code) return false;
+    try {
+      await applyActionCode(auth, code);
+    } catch (error) {
+      console.warn('applyActionCode failed:', error?.code || error?.message || error);
+      return false;
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+    if (auth.currentUser) {
+      await reload(auth.currentUser);
+      setUser({ ...auth.currentUser });
+    }
+    return true;
+  }, []);
+
   const logout = useCallback(async () => {
     confirmationRef.current = null;
     setNewGooglePending(false);
@@ -233,6 +270,7 @@ export function AuthProvider({ children }) {
     sendLinkOtp,
     confirmLinkOtp,
     refreshUser,
+    processVerificationLink,
     logout,
   };
 

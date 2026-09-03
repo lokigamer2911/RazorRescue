@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import Spinner from './components/Spinner';
 import Landing from './pages/Landing';
@@ -32,8 +32,20 @@ export default function App() {
 }
 
 function AppInner() {
-  const { user, initializing, logout } = useAuth();
+  const { user, initializing, logout, processVerificationLink } = useAuth();
   const [page, setPage] = useState('landing'); // 'landing' | 'auth' | 'dashboard'
+
+  // Opened from an email-verification link (?mode=verifyEmail&oobCode=…):
+  // confirm the code, then a verified signed-in user lands on the dashboard.
+  useEffect(() => {
+    let cancelled = false;
+    processVerificationLink().then((applied) => {
+      if (applied && !cancelled) setPage('dashboard');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [processVerificationLink]);
   const [authMode, setAuthMode] = useState('login');
   const [view, setView] = useState('command-center');
   const [copilotOpen, setCopilotOpen] = useState(false);
