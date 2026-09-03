@@ -24,10 +24,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: amondnet/vercel-action@v25
+      - name: Deploy to Vercel
+        if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
+        uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           working-directory: frontend
           vercel-args: '--prod'
+      - name: Skip notice
+        if: ${{ secrets.VERCEL_TOKEN == '' || secrets.VERCEL_ORG_ID == '' || secrets.VERCEL_PROJECT_ID == '' }}
+        run: |
+          echo "⚠ Skipping Vercel deploy — add these three repository secrets"
+          echo "   (Settings → Secrets and variables → Actions):"
+          echo "   - VERCEL_TOKEN     (vercel.com/account/tokens)"
+          echo "   - VERCEL_ORG_ID    (vercel.com → your team → Settings → General → Team ID)"
+          echo "   - VERCEL_PROJECT_ID (vercel.com → your project → Settings → General → Project ID)"
+          echo "   Then re-run this job. Also set VITE_FIREBASE_* as env vars in the"
+          echo "   Vercel project (Settings → Environment Variables) for Production/Preview."
