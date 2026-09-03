@@ -1,23 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, Bot, Store } from 'lucide-react';
+import { GearSix as SettingsIcon, Shield, Storefront, UserCircle, Phone, DeviceMobile, SealCheck, Envelope } from '@phosphor-icons/react';
+import Spinner from '../components/Spinner';
 import { useAppState } from '../hooks/useAppState';
+import { useAuth, friendlyAuthError, isPhone, normalizePhone } from '../hooks/useAuth';
 import { animate, stagger } from 'animejs';
-import clsx from 'clsx';
-
-const MODELS = [
-  { name: 'Claude Sonnet 4', role: 'Chief Analyst', color: '#8b5cf6' },
-  { name: 'GPT-4o', role: 'Pattern Detector', color: '#10b981' },
-  { name: 'Gemini 2.5 Pro', role: 'Data Synthesizer', color: '#3b82f6' },
-  { name: 'Claude Haiku 3.5', role: 'Fast Responder', color: '#f97316' },
-  { name: 'GPT-4o Mini', role: 'Customer Profiler', color: '#06b6d4' },
-  { name: 'DeepSeek R1', role: 'Deep Reasoner', color: '#8b5cf6' },
-  { name: 'Gemini 2.0 Flash', role: 'Speed Analyst', color: '#14b8a6' },
-  { name: 'Llama 4 Maverick', role: 'Risk Assessor', color: '#ec4899' },
-  { name: 'Qwen 3 235B', role: 'Quant Analyst', color: '#f59e0b' },
-  { name: 'GPT-4.1 Mini', role: 'Narrative Gen', color: '#ef4444' },
-  { name: 'Claude 3.5 Haiku', role: 'Incident Monitor', color: '#22d3ee' },
-  { name: 'Mistral Small', role: 'Compliance', color: '#fb923c' },
-];
 
 const POLICIES = [
   { label: 'Max single recovery', val: '₹10,000' },
@@ -30,10 +16,23 @@ const POLICIES = [
 
 export default function Settings() {
   const { merchant, setMerchant } = useAppState();
-  const [name, setName] = useState(merchant.name);
+  const auth = useAuth();
+  const user = auth.user;
+
+  const [name, setName] = useState(user?.displayName || '');
+  const [savedName, setSavedName] = useState(false);
+  const [merchantName, setMerchantName] = useState(merchant.name);
   const [revenue, setRevenue] = useState('10,00,000');
   const [txns, setTxns] = useState('10000');
   const cardsRef = useRef(null);
+
+  /* phone linking state */
+  const [phone, setPhone] = useState('');
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneStep, setPhoneStep] = useState('idle'); // idle | otp
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     if (!cardsRef.current) return;
@@ -42,73 +41,191 @@ export default function Settings() {
     return () => c.pause();
   }, []);
 
-  const save = () => setMerchant({ name, potentialRevenue: parseInt(revenue.replace(/,/g, '')), totalTransactions: parseInt(txns) });
+  const saveMerchant = () =>
+    setMerchant({ name: merchantName, potentialRevenue: parseInt(revenue.replace(/,/g, '')), totalTransactions: parseInt(txns) });
+
+  const saveName = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await auth.updateName(name);
+      setSavedName(true);
+      setTimeout(() => setSavedName(false), 2500);
+    } catch (err) {
+      setError(friendlyAuthError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendPhoneCode = async () => {
+    setError('');
+    setNotice('');
+    if (!isPhone(phone)) return setError('Enter a valid phone number with country code (e.g. +91 98765 43210).');
+    setBusy(true);
+    try {
+      await auth.sendLinkOtp(normalizePhone(phone));
+      setPhoneStep('otp');
+      setNotice(`Code sent to ${normalizePhone(phone)}.`);
+    } catch (err) {
+      setError(friendlyAuthError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmPhoneLink = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await auth.confirmLinkOtp(phoneOtp);
+      setPhoneStep('idle');
+      setPhone('');
+      setPhoneOtp('');
+      setNotice('Phone number linked. You can now log in with it too.');
+    } catch (err) {
+      setError(friendlyAuthError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inputCls = 'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[12.5px] text-gray-700 outline-none focus:border-blue-400 transition-all';
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1200px] mx-auto" ref={cardsRef}>
-      <h2 className="text-[22px] font-bold tracking-tight text-white/90 mb-1 reveal-card" style={{ opacity: 0 }}>
-        <SettingsIcon className="w-5 h-5 text-cyan-400 inline mr-2 -mt-1" /> Settings
+    <div className="p-6 lg:p-8 max-w-[1200px] mx-auto bg-gray-50/50 min-h-full" ref={cardsRef}>
+      <h2 className="text-[22px] font-bold tracking-tight text-gray-900 mb-1 reveal-card" style={{ opacity: 0 }}>
+        <SettingsIcon weight="fill" className="w-5 h-5 text-blue-600 inline mr-2 -mt-1" /> Settings
       </h2>
-      <p className="text-[13px] text-white/25 mb-6 reveal-card" style={{ opacity: 0 }}>Configure AI models, merchant, and policies</p>
+      <p className="text-[13px] text-gray-400 mb-6 reveal-card" style={{ opacity: 0 }}>Your account, merchant profile, and safety policies</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Merchant */}
-        <div className="card-glass p-6 reveal-card noise" style={{ opacity: 0 }}>
+        {/* Account */}
+        <div className="card-clean p-6 reveal-card" style={{ opacity: 0 }}>
           <div className="flex items-center gap-2 mb-5">
-            <Store className="w-4 h-4 text-cyan-400" />
-            <span className="text-[11px] text-white/25 uppercase tracking-[0.1em] font-medium">Merchant Profile</span>
+            <UserCircle weight="fill" className="w-4 h-4 text-blue-600" />
+            <span className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Account</span>
           </div>
           <div className="space-y-4">
             <div>
-              <label className="text-[11px] text-white/30 mb-1 block">Name</label>
-              <input value={name} onChange={e => setName(e.target.value)}
-                className="w-full px-4 py-2.5 bg-navy-800 border border-white/[0.06] rounded-xl text-[12.5px] text-white/80 outline-none focus:border-cyan/40 transition-all" />
+              <label className="text-[11px] text-gray-500 mb-1.5 block">Full name</label>
+              <div className="flex gap-2">
+                <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} placeholder="Your name" />
+                <button onClick={saveName} disabled={busy} className="px-4 btn-primary text-[12px] whitespace-nowrap disabled:opacity-60">
+                  {savedName ? 'Saved ✓' : 'Save'}
+                </button>
+              </div>
             </div>
+
             <div>
-              <label className="text-[11px] text-white/30 mb-1 block">Potential Revenue</label>
-              <input value={revenue} onChange={e => setRevenue(e.target.value)}
-                className="w-full px-4 py-2.5 bg-navy-800 border border-white/[0.06] rounded-xl text-[12.5px] text-white/80 outline-none focus:border-cyan/40 transition-all" />
+              <label className="text-[11px] text-gray-500 mb-1.5 block">Email</label>
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl">
+                <Envelope weight="fill" className="w-3.5 h-3.5 text-gray-400" />
+                <span className="text-[12.5px] text-gray-700 flex-1 truncate">{user?.email || '—'}</span>
+                {user?.emailVerified ? (
+                  <span className="badge-sm badge-emerald"><SealCheck weight="fill" className="w-3 h-3" /> Verified</span>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      setBusy(true);
+                      setError('');
+                      try {
+                        await auth.resendVerification();
+                        setNotice('Verification email sent.');
+                      } catch (err) {
+                        setError(friendlyAuthError(err));
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                    disabled={busy}
+                    className="badge-sm badge-amber hover:brightness-95 transition-all"
+                  >
+                    Verify email
+                  </button>
+                )}
+              </div>
             </div>
+
             <div>
-              <label className="text-[11px] text-white/30 mb-1 block">Transactions</label>
-              <input type="number" value={txns} onChange={e => setTxns(e.target.value)}
-                className="w-full px-4 py-2.5 bg-navy-800 border border-white/[0.06] rounded-xl text-[12.5px] text-white/80 outline-none focus:border-cyan/40 transition-all" />
+              <label className="text-[11px] text-gray-500 mb-1.5 block">Phone number</label>
+              {user?.phoneNumber ? (
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl">
+                  <Phone weight="fill" className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-[12.5px] text-gray-700 flex-1">{user.phoneNumber}</span>
+                  <span className="badge-sm badge-emerald"><SealCheck weight="fill" className="w-3 h-3" /> Linked</span>
+                </div>
+              ) : phoneStep === 'idle' ? (
+                <div className="flex gap-2">
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" className={inputCls} />
+                  <button onClick={sendPhoneCode} disabled={busy} className="px-4 btn-secondary text-[12px] whitespace-nowrap disabled:opacity-60">
+                    <DeviceMobile weight="fill" className="w-3.5 h-3.5 inline mr-1 -mt-0.5" /> Link phone
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={phoneOtp}
+                      onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="6-digit code"
+                      inputMode="numeric"
+                      className={`${inputCls} !font-mono !tracking-[0.3em]`}
+                    />
+                    <button onClick={confirmPhoneLink} disabled={busy || phoneOtp.length < 6} className="px-4 btn-primary text-[12px] whitespace-nowrap disabled:opacity-60">
+                      {busy ? <Spinner className="w-3.5 h-3.5" /> : 'Confirm'}
+                    </button>
+                  </div>
+                  <button onClick={() => setPhoneStep('idle')} className="text-[11px] text-gray-400 hover:text-gray-600">
+                    Change number
+                  </button>
+                </div>
+              )}
+              {!user?.phoneNumber && phoneStep === 'idle' && (
+                <p className="text-[10.5px] text-gray-400 mt-1.5">Linking a phone lets you log in with an OTP instead of a password.</p>
+              )}
             </div>
-            <button onClick={save} className="w-full py-2.5 btn-glow text-[12px]">Save Changes</button>
+
+            {error && <div className="px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl text-[11.5px] text-red-700">{error}</div>}
+            {notice && <div className="px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11.5px] text-emerald-700">{notice}</div>}
           </div>
         </div>
 
-        {/* Models */}
-        <div className="card-glass p-6 reveal-card noise" style={{ opacity: 0 }}>
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2">
-              <Bot className="w-4 h-4 text-cyan-400" />
-              <span className="text-[11px] text-white/25 uppercase tracking-[0.1em] font-medium">AI Engine — 12 Models</span>
-            </div>
-            <span className="badge badge-emerald">Connected</span>
+        {/* Merchant */}
+        <div className="card-clean p-6 reveal-card" style={{ opacity: 0 }}>
+          <div className="flex items-center gap-2 mb-5">
+            <Storefront weight="fill" className="w-4 h-4 text-blue-600" />
+            <span className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Merchant Profile</span>
           </div>
-          <div className="space-y-1.5">
-            {MODELS.map((m, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2 bg-white/[0.015] rounded-xl border border-white/[0.03] hover:bg-white/[0.03] transition-colors">
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: m.color }} />
-                <span className="text-[11.5px] text-white/60 flex-1">{m.name}</span>
-                <span className="text-[9.5px] text-white/20 italic">{m.role}</span>
-              </div>
-            ))}
+          <div className="space-y-4">
+            <div>
+              <label className="text-[11px] text-gray-500 mb-1.5 block">Name</label>
+              <input value={merchantName} onChange={(e) => setMerchantName(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-500 mb-1.5 block">Potential Revenue</label>
+              <input value={revenue} onChange={(e) => setRevenue(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-500 mb-1.5 block">Transactions</label>
+              <input type="number" value={txns} onChange={(e) => setTxns(e.target.value)} className={inputCls} />
+            </div>
+            <button onClick={saveMerchant} className="w-full py-2.5 btn-primary text-[12px]">Save Changes</button>
           </div>
         </div>
 
         {/* Policies */}
-        <div className="card-glass p-6 lg:col-span-2 reveal-card noise" style={{ opacity: 0 }}>
+        <div className="card-clean p-6 lg:col-span-2 reveal-card" style={{ opacity: 0 }}>
           <div className="flex items-center gap-2 mb-5">
-            <Shield className="w-4 h-4 text-emerald" />
-            <span className="text-[11px] text-white/25 uppercase tracking-[0.1em] font-medium">Safety Policies</span>
+            <Shield weight="fill" className="w-4 h-4 text-emerald-600" />
+            <span className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Safety Policies</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {POLICIES.map((p, i) => (
-              <div key={i} className="flex justify-between items-center px-4 py-3 bg-white/[0.015] rounded-xl border border-white/[0.03]">
-                <span className="text-[11.5px] text-white/30">{p.label}</span>
-                <span className="text-[11.5px] font-semibold text-cyan-400 font-mono">{p.val}</span>
+              <div key={i} className="flex justify-between items-center px-4 py-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors">
+                <span className="text-[11.5px] text-gray-500">{p.label}</span>
+                <span className="text-[11.5px] font-semibold text-gray-900 font-mono">{p.val}</span>
               </div>
             ))}
           </div>

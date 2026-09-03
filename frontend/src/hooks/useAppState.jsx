@@ -22,7 +22,7 @@ export function AppStateProvider({ children }) {
   const [activeIncident, setActiveIncident] = useState(null);
   const [timeline, setTimeline] = useState([
     { time: '19:42', icon: '🔴', title: 'Payment failure spike detected', desc: 'UPI failure rate increased from 4.2% to 13.7%', type: 'danger' },
-    { time: '19:43', icon: '🔍', title: 'AI investigation started', desc: 'Multi-model spiderweb activated — 12 AI models analyzing', type: 'info' },
+    { time: '19:43', icon: '🔍', title: 'AI investigation started', desc: 'Multi-agent analysis network activated — specialized agents analyzing', type: 'info' },
     { time: '19:43', icon: '📊', title: '428 affected transactions identified', desc: 'Segmented by bank, amount, and time window', type: 'info' },
     { time: '19:44', icon: '💰', title: '₹62,400 revenue at risk calculated', desc: 'Based on failed transaction amounts and recovery probability', type: 'danger' },
     { time: '19:44', icon: '🧠', title: 'Recovery strategy generated', desc: 'Send payment links with alternate methods — LOW risk', type: 'success' },

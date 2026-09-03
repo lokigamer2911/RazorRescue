@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { DollarSign, Rocket, Zap, Lock, Check, X } from 'lucide-react';
+import { CurrencyInr, RocketLaunch, Lightning, Lock, Check, X } from '@phosphor-icons/react';
 import { useAppState } from '../hooks/useAppState';
 import { formatCurrency } from '../utils/simulation';
 import { animate, stagger } from 'animejs';
@@ -15,12 +15,11 @@ export default function Recovery() {
   const { autopilotMode, setAutopilotMode, addTimelineEntry, recoveryData, setRecoveryData, recoveryActive, setRecoveryActive, saveCampaign, saveAction, activeIncident } = useAppState();
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Ready');
-  const cardsRef = useRef(null);
+  const ref = useRef(null);
 
   useEffect(() => {
-    if (!cardsRef.current) return;
-    const cards = cardsRef.current.querySelectorAll('.reveal-card');
-    const c = animate(cards, { opacity: [0, 1], translateY: [24, 0], duration: 700, delay: stagger(70, { start: 100 }), ease: 'outExpo' });
+    if (!ref.current) return;
+    const c = animate(ref.current.querySelectorAll('.rc'), { opacity: [0, 1], translateY: [20, 0], duration: 600, delay: stagger(60, { start: 80 }), ease: 'outExpo' });
     return () => c.pause();
   }, []);
 
@@ -28,11 +27,9 @@ export default function Recovery() {
     if (recoveryActive) return;
     setRecoveryActive(true);
     setStatus('Initializing');
-    addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🚀', title: 'Recovery campaign started', desc: 'Multi-channel recovery for 312 customers', type: 'info' });
-
-    // Save to backend
+    addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🚀', title: 'Recovery campaign started', desc: 'Multi-channel recovery', type: 'info' });
     saveCampaign({ incidentId: activeIncident?.id || null, status: 'running', customersContacted: 0, paymentsRecovered: 0, amountRecovered: 0, recoveryRate: 0, startedAt: new Date().toISOString() });
-    saveAction({ type: 'recovery', title: 'Recovery campaign launched', description: 'Sending payment links to 312 eligible customers', riskLevel: 'low', status: 'completed' });
+    saveAction({ type: 'recovery', title: 'Recovery campaign launched', description: 'Sending payment links', riskLevel: 'low', status: 'completed' });
 
     const total = 312;
     let contacted = 0, recovered = 0, amount = 0;
@@ -49,8 +46,6 @@ export default function Recovery() {
     }
     setStatus('Complete');
     addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🎉', title: `Complete — ${formatCurrency(amount)} recovered`, desc: `Rate: ${Math.round((recovered / total) * 100)}%`, type: 'success' });
-
-    // Save final state
     saveCampaign({ incidentId: activeIncident?.id || null, status: 'complete', customersContacted: contacted, paymentsRecovered: recovered, amountRecovered: amount, recoveryRate: Math.round((recovered / total) * 100), completedAt: new Date().toISOString() });
     saveAction({ type: 'recovery-complete', title: `Recovery complete: ${formatCurrency(amount)}`, description: `${recovered}/${total} customers responded`, riskLevel: 'low', status: 'completed', revenueRecovered: amount });
   };
@@ -63,51 +58,50 @@ export default function Recovery() {
   const p = perms[autopilotMode];
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1000px] mx-auto" ref={cardsRef}>
-      <div className="ambient-orb top-[-5%] right-[10%] w-[350px] h-[350px] bg-emerald/[0.04]" />
-      <h2 className="text-[22px] font-bold tracking-tight text-white/90 mb-1 reveal-card" style={{ opacity: 0 }}>
-        <DollarSign className="w-5 h-5 text-emerald inline mr-2 -mt-1" /> Recovery Operations
+    <div className="p-6 lg:p-8 max-w-[1000px] mx-auto bg-gray-50/50 min-h-full" ref={ref}>
+      <h2 className="text-[22px] font-bold tracking-tight text-gray-900 mb-1 rc" style={{ opacity: 0 }}>
+        <CurrencyInr weight="fill" className="w-5 h-5 text-emerald-600 inline mr-2 -mt-1" /> Recovery Operations
       </h2>
-      <p className="text-[13px] text-white/25 mb-6 reveal-card" style={{ opacity: 0 }}>Monitor and manage active recovery campaigns</p>
+      <p className="text-[13px] text-gray-400 mb-6 rc" style={{ opacity: 0 }}>Monitor and manage active recovery campaigns</p>
 
-      <div className="card-glass p-6 mb-5 reveal-card noise" style={{ opacity: 0 }}>
+      <div className="card-clean p-6 mb-5 rc" style={{ opacity: 0 }}>
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-[15px] font-bold text-white/85">Campaign: UPI Failure Incident</h3>
-          <span className={clsx('badge', status === 'Ready' ? 'badge-cyan' : status === 'Running' ? 'badge-amber' : 'badge-emerald')}>{status}</span>
+          <h3 className="text-[15px] font-bold text-gray-900">Campaign: Payment Failure Incident</h3>
+          <span className={clsx('badge-sm', status === 'Ready' ? 'badge-blue' : status === 'Running' ? 'badge-amber' : 'badge-emerald')}>{status}</span>
         </div>
-        <div className="h-1.5 bg-white/[0.03] rounded-full overflow-hidden mb-6">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyan to-emerald transition-all duration-500" style={{ width: `${progress}%` }} />
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-6">
+          <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {[
-            { label: 'Contacted', val: recoveryData.customersContacted },
-            { label: 'Recovered', val: recoveryData.paymentsRecovered },
-            { label: 'Revenue', val: formatCurrency(recoveryData.amountRecovered), green: true },
-            { label: 'Rate', val: `${recoveryData.recoveryRate}%` },
+            { l: 'Contacted', v: recoveryData.customersContacted },
+            { l: 'Recovered', v: recoveryData.paymentsRecovered },
+            { l: 'Revenue', v: formatCurrency(recoveryData.amountRecovered), g: true },
+            { l: 'Rate', v: `${recoveryData.recoveryRate}%` },
           ].map((s, i) => (
-            <div key={i} className="bg-white/[0.02] rounded-xl p-4 border border-white/[0.03] text-center">
-              <p className={clsx('text-[22px] font-mono font-black mb-1', s.green ? 'text-gradient-emerald' : 'text-white/75')}>{s.val}</p>
-              <p className="text-[9px] text-white/20 uppercase tracking-[0.1em]">{s.label}</p>
+            <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+              <p className={clsx('text-[22px] font-mono font-black mb-1', s.g ? 'text-emerald-600' : 'text-gray-800')}>{s.v}</p>
+              <p className="text-[9px] text-gray-400 uppercase tracking-wider">{s.l}</p>
             </div>
           ))}
         </div>
         <button onClick={launch} disabled={recoveryActive && status === 'Running'}
-          className={clsx('w-full py-4 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-2 btn-glow-green', (recoveryActive && status === 'Running') && 'opacity-60 cursor-not-allowed')}>
-          <Rocket className="w-4 h-4" />
+          className={clsx('w-full py-4 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-2 btn-green', (recoveryActive && status === 'Running') && 'opacity-60 cursor-not-allowed')}>
+          <RocketLaunch weight="fill" className="w-4 h-4" />
           {status === 'Ready' ? 'Launch Recovery Campaign' : status === 'Complete' ? '✅ Complete' : `${status}...`}
         </button>
       </div>
 
-      <div className="card-glass p-6 mb-5 reveal-card noise" style={{ opacity: 0 }}>
+      <div className="card-clean p-6 rc" style={{ opacity: 0 }}>
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-cyan-400" />
-            <span className="text-[11px] text-white/25 uppercase tracking-[0.1em] font-medium">Autopilot Policy</span>
+            <Lightning weight="fill" className="w-4 h-4 text-blue-600" />
+            <span className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Autopilot Policy</span>
           </div>
-          <div className="flex gap-1 bg-white/[0.03] rounded-xl p-1">
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
             {MODES.map(m => (
               <button key={m.id} onClick={() => setAutopilotMode(m.id)}
-                className={clsx('px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all', autopilotMode === m.id ? 'bg-white/[0.06] text-white' : 'text-white/25 hover:text-white/40')}>
+                className={clsx('px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all', autopilotMode === m.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
                 {m.emoji} {m.label}
               </button>
             ))}
@@ -115,22 +109,18 @@ export default function Recovery() {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div>
-            <h4 className="text-emerald text-[11px] font-bold mb-3 flex items-center gap-1.5"><Check className="w-3 h-3" /> Agent CAN:</h4>
+            <h4 className="text-emerald-600 text-[11px] font-bold mb-3 flex items-center gap-1.5"><Check weight="fill" className="w-3 h-3" /> Agent CAN:</h4>
             <div className="space-y-1.5">
               {p.can.map((item, i) => (
-                <div key={i} className="flex items-center gap-2 px-3 py-2 bg-emerald/[0.04] rounded-lg text-[11px] text-emerald/70">
-                  <Check className="w-3 h-3 flex-shrink-0" /> {item}
-                </div>
+                <div key={i} className="flex items-center gap-2 px-3 py-2 bg-emerald-50 rounded-lg text-[11px] text-emerald-700"><Check weight="fill" className="w-3 h-3 flex-shrink-0" /> {item}</div>
               ))}
             </div>
           </div>
           <div>
-            <h4 className="text-rose text-[11px] font-bold mb-3 flex items-center gap-1.5"><X className="w-3 h-3" /> Agent CANNOT:</h4>
+            <h4 className="text-red-500 text-[11px] font-bold mb-3 flex items-center gap-1.5"><X weight="fill" className="w-3 h-3" /> Agent CANNOT:</h4>
             <div className="space-y-1.5">
               {p.cant.map((item, i) => (
-                <div key={i} className="flex items-center gap-2 px-3 py-2 bg-rose/[0.04] rounded-lg text-[11px] text-rose/60">
-                  <Lock className="w-3 h-3 flex-shrink-0" /> {item}
-                </div>
+                <div key={i} className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-lg text-[11px] text-red-600"><Lock weight="fill" className="w-3 h-3 flex-shrink-0" /> {item}</div>
               ))}
             </div>
           </div>

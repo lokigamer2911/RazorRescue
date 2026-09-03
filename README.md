@@ -56,6 +56,7 @@ npm run dev
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `VITE_API_URL` | Yes | Backend URL (e.g., `https://razorrescue-api.onrender.com`) |
+| `VITE_FIREBASE_*` | Yes | Firebase Auth keys (see `frontend/.env.example` + `FIREBASE_SETUP.md`) |
 
 ## 🌐 Deployment
 
@@ -96,22 +97,12 @@ npm run dev
 - ✅ Dependency audit in CI
 - ✅ Pre-commit secret detection
 
-## 🤖 AI Models (12-Model Spiderweb)
+## 🤖 AI Engine
 
-| Model | Role |
-|-------|------|
-| Claude Sonnet 4 | Chief Analyst |
-| GPT-4o | Pattern Detector |
-| Gemini 2.5 Pro | Data Synthesizer |
-| Claude Haiku 3.5 | Fast Responder |
-| GPT-4o Mini | Customer Profiler |
-| DeepSeek R1 | Deep Reasoner |
-| Gemini 2.0 Flash | Speed Analyst |
-| Llama 4 Maverick | Risk Assessor |
-| Qwen 3 235B | Quantitative Analyst |
-| GPT-4.1 Mini | Narrative Generator |
-| Claude 3.5 Haiku | Incident Monitor |
-| Mistral Small 3.2 | Compliance Checker |
+The backend consults frontier models through OpenRouter (the exact model pool is
+configurable in `backend/src/services/openrouter.js`). Every model response is
+passed through strict validation, rate limiting, and a fixed system prompt —
+the agent can analyse and recommend, never move money.
 
 ## 📊 Features
 
@@ -120,8 +111,9 @@ npm run dev
 - **Recovery** — Campaign progress, autopilot policy (3 modes), safety permissions
 - **AI Timeline** — Full activity log with live updates
 - **Simulator** — Incident generator (5 types, 4 severity levels), What-If analysis
-- **Settings** — Merchant profile, 12 AI models, safety policies
+- **Settings** — Account (email, phone, verification), merchant profile, safety policies
 - **AI Copilot** — Side panel with smart revenue queries
+- **Auth** — Firebase login ecosystem: email/password, Google, phone OTP, forgot password, email verification (see `FIREBASE_SETUP.md`)
 
 ## 📄 License
 

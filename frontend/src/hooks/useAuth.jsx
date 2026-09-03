@@ -1,0 +1,244 @@
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithPhoneNumber,
+  linkWithPhoneNumber,
+  RecaptchaVerifier,
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  updateProfile,
+  signOut,
+  onAuthStateChanged,
+  reload,
+} from 'firebase/auth';
+import { auth, googleProvider, firebaseConfigured } from '../firebase';
+
+const AuthContext = createContext(null);
+
+/* ─── Helpers ─────────────────────────────────────────────────────────────── */
+
+export function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+export function isPhone(value) {
+  return /^\+?[0-9]{10,15}$/.test(value.trim().replace(/[\s\-()]/g, ''));
+}
+
+/** Normalise a phone number: bare Indian 10-digit → +91..., leading 0 → +91 */
+export function normalizePhone(value) {
+  let v = value.trim().replace(/[\s\-()]/g, '');
+  if (/^[0-9]{10}$/.test(v) && /^[6-9]/.test(v)) return `+91${v}`;
+  if (/^0[0-9]{10}$/.test(v)) return `+91${v.slice(1)}`;
+  if (/^\+?[0-9]{10,15}$/.test(v)) return v.startsWith('+') ? v : `+${v}`;
+  return v;
+}
+
+const ERROR_MESSAGES = {
+  'auth/email-already-in-use': 'An account with this email already exists. Try logging in instead.',
+  'auth/invalid-email': 'That email address looks invalid.',
+  'auth/wrong-password': 'Incorrect password. Try again.',
+  'auth/invalid-credential': 'Incorrect email or password.',
+  'auth/user-not-found': 'No account found with this email. Create one first.',
+  'auth/user-disabled': 'This account has been disabled.',
+  'auth/too-many-requests': 'Too many attempts — wait a minute and try again.',
+  'auth/weak-password': 'Password must be at least 6 characters.',
+  'auth/invalid-verification-code': 'That code is incorrect. Check and try again.',
+  'auth/invalid-phone-number': 'That phone number is invalid. Include the country code (e.g. +91).',
+  'auth/missing-phone-number': 'Enter a phone number to receive the code.',
+  'auth/quota-exceeded': 'SMS quota exceeded right now. Try again later.',
+  'auth/account-exists-with-different-credential':
+    'An account with this email already exists. Sign in with your password instead.',
+  'auth/operation-not-allowed': 'This sign-in method is not enabled in Firebase (see FIREBASE_SETUP.md).',
+  'auth/requires-recent-login': 'Please sign in again to make this change.',
+  'auth/popup-blocked': 'The popup was blocked — allow popups for this site and try again.',
+  'auth/network-request-failed': 'Network error. Check your connection and try again.',
+};
+
+export function friendlyAuthError(error) {
+  const code = error?.code || error?.message || '';
+  return ERROR_MESSAGES[code] || (error?.message ? error.message : 'Something went wrong. Try again.');
+}
+
+/** True when the user record was created in this exact sign-in (brand-new account). */
+function isNewUser(user) {
+  return !!user && user.metadata.creationTime === user.metadata.lastSignInTime;
+}
+
+/* ─── Provider ────────────────────────────────────────────────────────────── */
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [initializing, setInitializing] = useState(true);
+  const [newGooglePending, setNewGooglePending] = useState(false);
+  const confirmationRef = useRef(null); // pending phone OTP confirmation
+
+  useEffect(() => {
+    if (!auth) {
+      setInitializing(false);
+      return undefined;
+    }
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setInitializing(false);
+    });
+    return unsub;
+  }, []);
+
+  /** Force-refresh the current user (e.g. after clicking the verify link). */
+  const refreshUser = useCallback(async () => {
+    if (!auth?.currentUser) return null;
+    await reload(auth.currentUser);
+    setUser({ ...auth.currentUser });
+    return auth.currentUser;
+  }, []);
+
+  const requireAuth = useCallback(() => {
+    if (!auth) throw new Error(friendlyAuthError({ code: 'auth/operation-not-allowed' }));
+  }, []);
+
+  const signUp = useCallback(async ({ email, password, name }) => {
+    requireAuth();
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const u = credential.user;
+    if (name?.trim()) await updateProfile(u, { displayName: name.trim() });
+    await sendEmailVerification(u);
+    return u;
+  }, [requireAuth]);
+
+  const login = useCallback(async ({ email, password }) => {
+    requireAuth();
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    return credential.user;
+  }, [requireAuth]);
+
+  const forgotPassword = useCallback(async (email) => {
+    requireAuth();
+    await sendPasswordResetEmail(auth, email);
+  }, [requireAuth]);
+
+  /** Update the signed-in user's display name (e.g. after phone signup). */
+  const updateName = useCallback(async (name) => {
+    if (!auth?.currentUser) return;
+    if (name?.trim()) await updateProfile(auth.currentUser, { displayName: name.trim() });
+  }, []);
+
+  const resendVerification = useCallback(async () => {
+    requireAuth();
+    if (!auth.currentUser) return;
+    await sendEmailVerification(auth.currentUser);
+  }, [requireAuth]);
+
+  /**
+   * Continue with Google. Never creates a duplicate account:
+   *  - brand-new email → returns { status: 'new' } so the UI redirects to the
+   *    create-account step to finish the profile;
+   *  - email already used by a password account → returns { status: 'conflict', email };
+   *  - existing account → returns { status: 'existing' }.
+   */
+  const continueWithGoogle = useCallback(async () => {
+    try {
+      requireAuth();
+      const result = await signInWithPopup(auth, googleProvider);
+      const u = result.user;
+      if (isNewUser(u)) {
+        setNewGooglePending(true);
+        return { status: 'new' };
+      }
+      return { status: 'existing' };
+    } catch (error) {
+      if (error.code === 'auth/popup-closed-by-user') return { status: 'cancelled' };
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        return { status: 'conflict', email: error.customData?.email || '' };
+      }
+      throw new Error(friendlyAuthError(error));
+    }
+  }, []);
+
+  /** Finish creating the Google account: set the display name. */
+  const completeGoogleProfile = useCallback(async (name) => {
+    if (!auth?.currentUser) return;
+    if (name?.trim()) await updateProfile(auth.currentUser, { displayName: name.trim() });
+    setNewGooglePending(false);
+  }, []);
+
+  /* ── Phone OTP ── */
+
+  const makeVerifier = useCallback((containerId) => {
+    if (!auth) return null;
+    const verifier = new RecaptchaVerifier(auth, containerId, { size: 'invisible' });
+    return verifier;
+  }, []);
+
+  /** Send an OTP to a phone number (logs in, or creates a phone account if new). */
+  const sendOtp = useCallback(async (phone) => {
+    const verifier = makeVerifier('phone-recaptcha');
+    if (!verifier) throw new Error(friendlyAuthError({ code: 'auth/operation-not-allowed' }));
+    confirmationRef.current = {
+      verifier,
+      confirmation: await signInWithPhoneNumber(auth, normalizePhone(phone), verifier),
+    };
+  }, [makeVerifier]);
+
+  /** Verify the OTP for login / signup. Returns the signed-in user. */
+  const confirmOtp = useCallback(async (code) => {
+    const pending = confirmationRef.current;
+    if (!pending) throw new Error('Send the code first.');
+    const result = await pending.confirmation.confirm(code.trim());
+    return result.user;
+  }, []);
+
+  /** Send an OTP to link a phone number to the currently signed-in account. */
+  const sendLinkOtp = useCallback(async (phone) => {
+    const verifier = makeVerifier('phone-recaptcha');
+    if (!verifier) throw new Error(friendlyAuthError({ code: 'auth/operation-not-allowed' }));
+    if (!auth?.currentUser) throw new Error('You need to be signed in first.');
+    confirmationRef.current = {
+      verifier,
+      confirmation: await linkWithPhoneNumber(auth.currentUser, normalizePhone(phone), verifier),
+    };
+  }, [makeVerifier]);
+
+  /** Verify the linking OTP — phone becomes a login method on the account. */
+  const confirmLinkOtp = useCallback(async (code) => {
+    const pending = confirmationRef.current;
+    if (!pending) throw new Error('Send the code first.');
+    const result = await pending.confirmation.confirm(code.trim());
+    setUser({ ...result.user });
+    return result.user;
+  }, []);
+
+  const logout = useCallback(async () => {
+    confirmationRef.current = null;
+    setNewGooglePending(false);
+    if (auth) await signOut(auth);
+  }, []);
+
+  const value = {
+    firebaseConfigured,
+    user,
+    initializing,
+    newGooglePending,
+    signUp,
+    login,
+    forgotPassword,
+    resendVerification,
+    updateName,
+    continueWithGoogle,
+    completeGoogleProfile,
+    sendOtp,
+    confirmOtp,
+    sendLinkOtp,
+    confirmLinkOtp,
+    refreshUser,
+    logout,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}

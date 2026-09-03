@@ -14,3 +14,15 @@ coverage/
 *.tsbuildinfo
 frontend/dist/
 backend/dist/
+
+# Freebuff thread workspace + tooling
+.freebuff/
+.bunhome/
+.buntmp/
+frontend/.bunhome/
+frontend/.buntmp/
+frontend/.vite/
+*.tmp
+~$*
+
+desktop.ini
