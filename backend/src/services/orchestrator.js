@@ -40,19 +40,26 @@ export async function orchestrate({ prompt, sessionId = 'default' }) {
     const agent = ROSTER[agentId];
     let mode = 'engine';
     let output = null;
+    let usedModel = agent.model;
     if (hasKey()) {
-      try {
-        const llm = await chatCompletion(
-          `${dataBlock}\n\nUser question: ${prompt}\n\nProduce your specialist analysis now.`,
-          systemPromptFor(agentId),
-          agent.model,
-        );
-        if (!llm.demo) {
-          output = String(llm.content || '').trim();
-          mode = 'live';
+      // Try the primary model, then each fallback in order (resilience to
+      // retired/rate-limited model ids on OpenRouter).
+      for (const m of [agent.model, ...(agent.fallbacks || [])]) {
+        try {
+          const llm = await chatCompletion(
+            `${dataBlock}\n\nUser question: ${prompt}\n\nProduce your specialist analysis now.`,
+            systemPromptFor(agentId),
+            m,
+          );
+          if (!llm.demo) {
+            output = String(llm.content || '').trim();
+            mode = 'live';
+            usedModel = m;
+            break;
+          }
+        } catch (err) {
+          console.error(`[Orchestrator] ${agent.name} LLM ${m} failed → ${agent.fallbacks?.length ? 'next fallback' : 'engine'}:`, err.message);
         }
-      } catch (err) {
-        console.error(`[Orchestrator] ${agent.name} LLM failed → engine fallback:`, err.message);
       }
     }
     if (mode !== 'live') {
@@ -62,7 +69,7 @@ export async function orchestrate({ prompt, sessionId = 'default' }) {
     pipeline.push({
       agent: agentId,
       name: agent.name,
-      model: mode === 'engine' ? 'built-in analyzer' : agent.model,
+      model: mode === 'engine' ? 'built-in analyzer' : usedModel,
       mode,
       status: 'done',
       summary: String(output).replace(/\s+/g, ' ').slice(0, 260),
@@ -74,19 +81,24 @@ export async function orchestrate({ prompt, sessionId = 'default' }) {
   const blocks = specialistResults.map((r) => `### ${ROSTER[r.agentId].name} (${ROSTER[r.agentId].role})\n${r.output}`).join('\n\n');
   let answer;
   let chiefMode = 'engine';
+  let chiefModel = ROSTER.chief.model;
   if (hasKey()) {
-    try {
-      const chief = await chatCompletion(
-        `${dataBlock}\n\nSpecialist outputs:\n${blocks}\n\nUser question: ${prompt}\n\nProduce the final unified answer now.`,
-        systemPromptFor('chief'),
-        ROSTER.chief.model,
-      );
-      if (!chief.demo) {
-        answer = String(chief.content || '').trim();
-        chiefMode = 'live';
+    for (const m of [ROSTER.chief.model, ...(ROSTER.chief.fallbacks || [])]) {
+      try {
+        const chief = await chatCompletion(
+          `${dataBlock}\n\nSpecialist outputs:\n${blocks}\n\nUser question: ${prompt}\n\nProduce the final unified answer now.`,
+          systemPromptFor('chief'),
+          m,
+        );
+        if (!chief.demo) {
+          answer = String(chief.content || '').trim();
+          chiefMode = 'live';
+          chiefModel = m;
+          break;
+        }
+      } catch (err) {
+        console.error(`[Orchestrator] Chief LLM ${m} failed → ${ROSTER.chief.fallbacks?.length ? 'next fallback' : 'engine'}:`, err.message);
       }
-    } catch (err) {
-      console.error('[Orchestrator] Chief LLM failed → engine fallback:', err.message);
     }
   }
   if (chiefMode !== 'live') {
@@ -94,7 +106,7 @@ export async function orchestrate({ prompt, sessionId = 'default' }) {
   }
   pipeline.push({
     agent: 'chief', name: ROSTER.chief.name,
-    model: chiefMode === 'engine' ? 'built-in synthesizer' : ROSTER.chief.model,
+    model: chiefMode === 'engine' ? 'built-in synthesizer' : chiefModel,
     mode: chiefMode,
     status: 'done',
     summary: 'Synthesised all specialist outputs into the final answer.',

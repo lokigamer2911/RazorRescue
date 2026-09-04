@@ -4,7 +4,7 @@
 // any failure) the same agent runs its deterministic engine, which computes
 // answers from the exact same numbers — so output is always data-accurate.
 
-import { deriveFacts } from './contextStore.js';
+import { deriveFacts, severityOf } from './contextStore.js';
 
 const inr = (n) => '₹' + Number(n).toLocaleString('en-IN');
 const pct1 = (n) => Number(n).toFixed(1) + '%';
@@ -13,10 +13,11 @@ const GROUNDING_RULES = `You are part of a multi-agent analysis network for Razo
 
 HARD RULES (never violate):
 1. NEVER invent, estimate, or round numbers that are not in the DATA SNAPSHOT. If a figure is not present, say it is not available in the current data.
-2. Every figure you state must be traceable to the DATA SNAPSHOT provided.
+2. Every figure you state must be traceable to the DATA SNAPSHOT or the DERIVED FACTS section provided.
 3. Be concise and structured. Use markdown headings and bullet points.
 4. Never fabricate bank names, merchant names, timelines, or incident causes. Only report what DATA shows.
-5. If DATA shows zero transactions or no snapshot, answer honestly that no merchant data is loaded, and suggest connecting data — never produce fake metrics.`;
+5. If DATA shows zero transactions or no snapshot, answer honestly that no merchant data is loaded, and suggest connecting data — never produce fake metrics.
+6. Percentages, confidence levels, severity labels (CRITICAL/HIGH/ELEVATED/NORMAL) and ranges: use ONLY the exact values present in DATA or DERIVED FACTS. Never introduce your own confidence percentage, severity label, or computed figure — if it is not in the supplied sections, omit it.`;
 
 // ─── ROSTER ─────────────────────────────────────────────────────────────────
 
@@ -25,18 +26,21 @@ export const ROSTER = {
     id: 'router', name: 'Intent Router', model: null, role: 'Classifies the user question and selects the specialist agents to run.',
   },
   pattern: {
-    id: 'pattern', name: 'Pattern Detector', model: 'openai/gpt-4o-mini', role: 'Detects failure patterns: worst banks, peak hours, methods, dominant reasons.',
+    id: 'pattern', name: 'Pattern Detector', model: 'openai/gpt-4o-mini', fallbacks: ['anthropic/claude-haiku-4.5'], role: 'Detects failure patterns: worst banks, peak hours, methods, dominant reasons.',
   },
   risk: {
-    id: 'risk', name: 'Risk Assessor', model: 'anthropic/claude-haiku-3.5', role: 'Quantifies revenue at risk, concentration, and severity per bank.',
+    id: 'risk', name: 'Risk Assessor', model: 'anthropic/claude-haiku-4.5', fallbacks: ['openai/gpt-4o-mini'], role: 'Quantifies revenue at risk, concentration, and severity per bank.',
   },
   recovery: {
-    id: 'recovery', name: 'Recovery Planner', model: 'anthropic/claude-sonnet-4', role: 'Builds a safe recovery plan from exact at-risk amounts and eligible customers.',
+    id: 'recovery', name: 'Recovery Planner', model: 'anthropic/claude-sonnet-4', fallbacks: ['openai/gpt-4o-mini'], role: 'Builds a safe recovery plan from exact at-risk amounts and eligible customers.',
   },
   chief: {
-    id: 'chief', name: 'Chief Analyst', model: 'anthropic/claude-sonnet-4', role: 'Synthesises every specialist output into one clear, final answer.',
+    id: 'chief', name: 'Chief Analyst', model: 'anthropic/claude-sonnet-4', fallbacks: ['openai/gpt-4o-mini'], role: 'Synthesises every specialist output into one clear, final answer.',
   },
 };
+
+// Models an agent tries in order. Kept current with OpenRouter's public catalog
+// so a retired model id degrades to a live model — not silently to demo mode.
 
 // ─── INTENT ROUTER (deterministic — zero cost, instant) ────────────────────
 
@@ -125,8 +129,7 @@ function engineFor(agentId, facts) {
       lines.push(`**Revenue at risk:** ${inr(facts.revenueAtRisk)} across ${facts.failed.toLocaleString('en-IN')} failed transactions.`);
       const flagged = facts.topBanks.slice(0, 4).map((b) => {
         const rate = b.total > 0 ? (b.failed / b.total) * 100 : 0;
-        const level = rate > 15 ? 'CRITICAL' : rate > 10 ? 'HIGH' : rate > 6 ? 'ELEVATED' : 'NORMAL';
-        return `${b.name}: ${level} (${pct1(rate)}, ${inr(b.amount)} at risk)`;
+        return `${b.name}: ${severityOf(rate)} (${pct1(rate)}, ${inr(b.amount)} at risk)`;
       });
       lines.push(`**Bank risk ranking:** ${flagged.join('; ') || 'none in snapshot'}.`);
       lines.push(`**Concentration:** top 3 banks hold ${pct1(facts.concentration)} of all failures.`);

@@ -26,8 +26,8 @@ app.use(cors({
   credentials: true,
 }));
 
-// Body parsing with size limit
-app.use(express.json({ limit: '500kb' }));
+// Body parsing with size limit (must fit full transaction uploads for /analyse — up to 100k txns)
+app.use(express.json({ limit: '25mb' }));
 
 // Global rate limiter
 app.use('/api', apiLimiter);

@@ -115,6 +115,12 @@ export function getSnapshot(sessionId = 'default') {
 // ─── Derived facts (single source of truth for every agent) ───────────────
 // Mirrors frontend/src/utils/insights.js so both sides compute identical values.
 
+// Canonical severity bands (shared by engines and the LLM grounding block so
+// every agent labels banks identically).
+export function severityOf(rate) {
+  return rate > 15 ? 'CRITICAL' : rate > 10 ? 'HIGH' : rate > 6 ? 'ELEVATED' : 'NORMAL';
+}
+
 export function deriveFacts(snapshot) {
   const zero = () => ({
     total: 0, failed: 0, successRate: 0, revenueAtRisk: 0,
@@ -212,6 +218,24 @@ export function renderDataset(snapshot, opts = {}) {
   if (opts.incidents !== false && snapshot.incidents.length) {
     rows.push('Recent incidents (type | severity | affected | risk | confidence):');
     snapshot.incidents.forEach((i) => rows.push(`- ${i.type} | ${i.severity} | ${i.affectedTransactions} | ${inr(i.revenueAtRisk)} | ${i.aiConfidence}%`));
+  }
+  const f = deriveFacts(snapshot);
+  if (f.total > 0) {
+    rows.push('=== DERIVED FACTS (canonical — cite these exact values; never create your own) ===');
+    rows.push(`Top-3 bank concentration: ${f.concentration.toFixed(1)}% of all failures.`);
+    if (f.peakWindow) rows.push(`Peak window: ${String(f.peakWindow.start).padStart(2, '0')}:00–${String(f.peakWindow.end).padStart(2, '0')}:59 with ${f.peakWindow.share.toFixed(1)}% of all failures.`);
+    rows.push(`Severity bands (by bank failure rate): CRITICAL >15% | HIGH >10% | ELEVATED >6% | NORMAL <=6%.`);
+    const top4 = f.topBanks.slice(0, 4);
+    if (top4.length) {
+      rows.push('Bank severity (top 4 by failures):');
+      top4.forEach((b) => {
+        const rate = b.total > 0 ? (b.failed / b.total) * 100 : 0;
+        rows.push(`- ${b.name}: ${severityOf(rate)} (${rate.toFixed(1)}% failure rate)`);
+      });
+    }
+    rows.push(`Diagnosis confidence (data-derived): ${f.confidence}%.`);
+    rows.push(`Eligible customers (modelled 80% reachable): ${f.eligible.toLocaleString('en-IN')}.`);
+    rows.push(`Recoverable range (60-80% of at-risk amount): ${inr(f.recoverLow)} - ${inr(f.recoverHigh)}.`);
   }
   rows.push('=== END DATA SNAPSHOT ===');
   return rows.join('\n');
