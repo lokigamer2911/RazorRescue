@@ -17,7 +17,7 @@ HARD RULES (never violate):
 3. Be concise and structured. Use markdown headings and bullet points.
 4. Never fabricate bank names, merchant names, timelines, or incident causes. Only report what DATA shows.
 5. If DATA shows zero transactions or no snapshot, answer honestly that no merchant data is loaded, and suggest connecting data — never produce fake metrics.
-6. Percentages, confidence levels, severity labels (CRITICAL/HIGH/ELEVATED/NORMAL) and ranges: use ONLY the exact values present in DATA or DERIVED FACTS. Never introduce your own confidence percentage, severity label, or computed figure — if it is not in the supplied sections, omit it.`;
+6. Percentages, confidence levels, severity labels (CRITICAL/HIGH/ELEVATED/NORMAL), ranges and totals: cite ONLY values that appear VERBATIM in DATA or DERIVED FACTS. Do NOT attach a percentage or confidence to individual banks, methods, or actions; do NOT sum, multiply, average, or round figures into new numbers. If a figure is not printed in the supplied sections, omit it — never compute or estimate it.`;
 
 // ─── ROSTER ─────────────────────────────────────────────────────────────────
 
@@ -86,9 +86,8 @@ Your task (Pattern Detector):
 Your task (Risk Assessor):
 - State total revenue at risk and the failure count from DATA.
 - Rank banks by amount at risk (₹) and by failure rate; flag each as CRITICAL / HIGH / ELEVATED / NORMAL using DATA rates.
-- Report concentration: what % of all failures sit in the top 3 banks.
-- Estimate an overall confidence in the diagnosis from the data (do not invent beyond DATA).
-- Output: "## Risk Assessment" with a short table or bullets, exact numbers only.`;
+- Report concentration: what % of all failures sit in the top 3 banks.- Report the overall diagnosis confidence exactly as printed in DERIVED FACTS — never attach confidence percentages to individual banks or methods.
+      - Output: "## Risk Assessment" with a short table or bullets, exact numbers only, each traceable to DATA or DERIVED FACTS.`;
     case 'recovery':
       return `${base}
 
@@ -102,9 +101,8 @@ Your task (Recovery Planner):
 
 You are the final synthesizer. You receive the user's question plus outputs from specialist agents. Produce ONE polished answer:
 - Start with a one-line direct answer.
-- Follow with concise sections that merge the specialists, citing exact numbers.
-- End with a "Suggested next step" line and a confidence percentage.
-- Never add figures that do not appear in the specialist outputs or DATA.`;
+- Follow with concise sections that merge the specialists, citing exact numbers.- End with a "Suggested next step" line and the diagnosis confidence from DERIVED FACTS if present.
+      - Never add figures, percentages, confidence levels, or totals that do not appear VERBATIM in the specialist outputs, DATA, or DERIVED FACTS.`;
     default:
       return base;
   }
