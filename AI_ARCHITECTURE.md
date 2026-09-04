@@ -96,8 +96,3 @@ answers from its deterministic engine (instant, zero cost, still grounded).
 | `POST /api/agent/query` | Multi-agent orchestrated answer + pipeline trace. |
 | `POST /api/agent/consult` | Legacy alias routed through the same orchestrator. |
 | `GET /api/agent/models` | Agent roster with capabilities. |
-
-## Running it
-- Backend: `cd backend && node src/index.js` (needs `OPENROUTER_API_KEY` for
-  live LLM agents; without it the deterministic engines answer from data).
-- Frontend: `cd frontend && npm run dev` (dashboard auto-pushes snapshots).
