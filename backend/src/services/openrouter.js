@@ -29,8 +29,10 @@ export async function chatCompletion(prompt, systemPrompt, model) {
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
+    // Never fabricate metrics. Callers (the orchestrator) fall back to their
+    // deterministic data engines when demo is true.
     return {
-      content: generateDemoResponse(prompt),
+      content: '',
       model: model || 'demo',
       usage: { prompt_tokens: 0, completion_tokens: 0 },
       demo: true,
@@ -89,15 +91,4 @@ export async function chatCompletion(prompt, systemPrompt, model) {
     if (err.name === 'AbortError') throw new Error('AI request timed out');
     throw err;
   }
-}
-
-function generateDemoResponse(prompt) {
-  const lower = String(prompt).toLowerCase();
-  if (lower.includes('investigation') || lower.includes('root cause')) {
-    return `## AI Investigation Report\n\n**Confidence:** 91%\n\nThe spike correlates with a known NPCI routing issue affecting Bank of Baroda, Union Bank, and Indian Bank UPI endpoints between 17:30 and 22:00.\n\n### Bank Failure Rates\n| Bank | Rate | Status |\n|------|------|--------|\n| Bank of Baroda | 18.4% | CRITICAL |\n| Union Bank | 16.7% | HIGH |\n| Indian Bank | 14.2% | HIGH |\n\nThese three banks account for 71% of all failed transactions.`;
-  }
-  if (lower.includes('recovery') || lower.includes('recommend')) {
-    return `## Recovery Strategy\n\n**Expected Recovery:** ₹41,800 – ₹49,200\n**Risk Level:** LOW\n\n1. Send recovery payment links to 312 eligible customers\n2. Suggest Net Banking/Card as alternatives\n3. Monitor recovery in real-time\n\n**Safety:** No payment amount changes. Customer must approve.`;
-  }
-  return `Revenue dropped **12.4%** primarily due to UPI payment failures from 3 banks. ₹62,400 is potentially recoverable. AI recommends sending recovery links with alternate payment methods.`;
 }

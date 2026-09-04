@@ -16,7 +16,7 @@ app.use(helmet({
 }));
 
 // CORS — whitelist allowed origins
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:3000')
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:3000,https://razorrescue.vercel.app')
   .split(',').map(s => s.trim());
 app.use(cors({
   origin: (origin, callback) => {

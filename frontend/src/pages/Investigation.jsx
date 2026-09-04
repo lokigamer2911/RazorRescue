@@ -6,7 +6,7 @@ import { animate, stagger } from 'animejs';
 import clsx from 'clsx';
 
 export default function Investigation() {
-  const { analysis } = useAppState();
+  const { analysis, insights } = useAppState();
   const ref = useRef(null);
   const topBanks = (analysis?.byBank || []).slice(0, 4);
   const topFailed = (analysis?.topFailed || []).slice(0, 8);
@@ -38,7 +38,7 @@ export default function Investigation() {
             { l: 'Failed', v: totalFailed.toLocaleString(), c: 'text-red-500' },
             { l: 'Success Rate', v: `${analysis?.successRate || 100}%`, c: 'text-emerald-600' },
             { l: 'Revenue at Risk', v: formatCurrency(analysis?.revenueAtRisk || 0), c: 'text-red-500' },
-            { l: 'AI Confidence', v: '91%', c: 'text-blue-600' },
+            { l: 'AI Confidence', v: `${insights.confidence}%`, c: 'text-blue-600' },
           ].map((s, i) => (
             <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
               <p className="text-[9px] text-gray-400 uppercase tracking-wider mb-1">{s.l}</p>
@@ -55,7 +55,7 @@ export default function Investigation() {
           <span className="badge-sm badge-blue">AI Generated</span>
         </div>
         <p className="text-[13px] text-gray-600 leading-relaxed mb-6">
-          Revenue dropped because failures increased across multiple banks. <span className="font-semibold text-gray-900">{totalFailed}</span> transactions failed. The spike correlates with known NPCI routing issues.
+          Revenue is at risk because failures concentrated in specific banks and hours. <span className="font-semibold text-gray-900">{totalFailed.toLocaleString('en-IN')}</span> of {totalTxns.toLocaleString('en-IN')} transactions failed ({analysis?.successRate || 100}% success rate).{topBanks.length > 0 ? <> The top {Math.min(3, topBanks.length)} banks ({topBanks.slice(0, 3).map((b) => b.name).join(', ')}) account for <span className="font-semibold text-gray-900">{insights.concentration.toFixed(0)}%</span> of all failures.</> : null}
         </p>
 
         <div className="space-y-3 mb-6">
@@ -84,7 +84,9 @@ export default function Investigation() {
             <span className="text-[12px] text-blue-700 font-semibold">AI Agent Explanation</span>
           </div>
           <p className="text-[12.5px] text-gray-600 leading-relaxed">
-            The spike correlates with a known NPCI routing issue affecting these bank UPI endpoints. These banks account for the majority of all failed transactions. <span className="text-emerald-600 font-semibold">Confidence: 91%</span>
+            {insights.worstBank ? <>The worst affected endpoint is <span className="font-semibold text-gray-900">{insights.worstBank.name}</span> at a {insights.worstBank.rate.toFixed(1)}% failure rate.</> : 'No bank-level failure rates available in this snapshot.'}
+            {insights.peakWindow ? <> Failures peak between <span className="font-semibold text-gray-900">{String(insights.peakWindow.start).padStart(2, '0')}:00–{String(insights.peakWindow.end).padStart(2, '0')}:59</span> ({insights.peakShare.toFixed(0)}% of failures).</> : null}
+            {' '}Diagnosis confidence is derived from failure concentration and peak clarity. <span className="text-emerald-600 font-semibold">Confidence: {insights.confidence}%</span>
           </p>
         </div>
       </div>
@@ -129,7 +131,7 @@ export default function Investigation() {
 
         <div className="grid grid-cols-3 gap-3 mb-5">
           {[
-            { l: 'Expected Recovery', v: '₹41.8K – ₹49.2K', c: 'text-emerald-600' },
+            { l: 'Expected Recovery', v: `${formatCurrency(insights.recoverLow)} – ${formatCurrency(insights.recoverHigh)}`, c: 'text-emerald-600' },
             { l: 'Risk Level', v: 'LOW', c: 'text-emerald-600' },
             { l: 'Required', v: 'Customer approval', c: 'text-gray-600' },
           ].map((m, i) => (

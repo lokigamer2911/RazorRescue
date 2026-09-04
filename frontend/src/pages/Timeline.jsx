@@ -1,31 +1,39 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Clock, ArrowCounterClockwise, Play } from '@phosphor-icons/react';
 import { useAppState } from '../hooks/useAppState';
+import { formatCurrency } from '../utils/simulation';
 import { animate, stagger } from 'animejs';
 import clsx from 'clsx';
 
 const dotColors = { danger: 'bg-red-500', success: 'bg-emerald-500', warning: 'bg-amber-500', info: 'bg-blue-500' };
 
-const REPLAY_STEPS = [
-  { time: '19:42', icon: '🔴', title: 'Payment failure spike begins', desc: 'UPI failure rate starts climbing from 4.2%', type: 'danger', delay: 0 },
-  { time: '19:43', icon: '🤖', title: 'AI detects anomaly', desc: 'Continuous monitoring triggers investigation', type: 'info', delay: 1200 },
-  { time: '19:43', icon: '🔍', title: 'AI analysis network activated', desc: 'Specialized agents analyzing in parallel', type: 'info', delay: 2400 },
-  { time: '19:43', icon: '📊', title: 'Affected transactions identified', desc: 'Segmented by bank, amount, and time', type: 'info', delay: 3600 },
-  { time: '19:44', icon: '💰', title: 'Revenue at risk calculated', desc: 'Based on failed transaction amounts', type: 'danger', delay: 4800 },
-  { time: '19:44', icon: '🧠', title: 'Recovery strategy generated', desc: 'Send payment links with alternate methods', type: 'success', delay: 6000 },
-  { time: '19:45', icon: '👤', title: 'Merchant approval requested', desc: 'Waiting for approval to proceed', type: 'warning', delay: 7200 },
-  { time: '19:46', icon: '✅', title: 'Recovery campaign launched', desc: 'Customers contacted via SMS + Email', type: 'success', delay: 8400 },
-  { time: '19:52', icon: '💰', title: 'First payments recovered', desc: 'Recovery rate tracking above expectations', type: 'success', delay: 9600 },
-  { time: '20:04', icon: '💰', title: 'Recovery accelerating', desc: 'More customers responding to links', type: 'success', delay: 10800 },
-  { time: '20:18', icon: '🎉', title: 'Campaign complete', desc: 'Revenue successfully recovered', type: 'success', delay: 12000 },
-];
+// Replay script — every figure derived from the live analysis snapshot.
+function makeReplaySteps(insights) {
+  const f = insights || {};
+  const noData = !f.total || f.total <= 0;
+  const hh = (n) => String(n).padStart(2, '0');
+  return [
+    { time: 'now', icon: '🔴', title: 'Failure anomaly detected', desc: noData ? 'Monitoring active — awaiting transaction data' : `Overall failure rate observed at ${f.failedRate?.toFixed(1)}%`, type: 'danger', delay: 0 },
+    { time: '+1s', icon: '🤖', title: 'AI detects anomaly', desc: 'Continuous monitoring triggers investigation network', type: 'info', delay: 1200 },
+    { time: '+2s', icon: '🔍', title: 'Specialist agents activated', desc: 'Pattern Detector + Risk Assessor analysing in parallel', type: 'info', delay: 2400 },
+    { time: '+3s', icon: '📊', title: 'Failures segmented', desc: noData ? 'By bank, amount and time window' : `${f.failed?.toLocaleString('en-IN')} failed transactions by bank, amount and time`, type: 'info', delay: 3600 },
+    { time: '+4s', icon: '💰', title: 'Revenue at risk calculated', desc: noData ? 'Awaiting data' : `${formatCurrency(f.revenueAtRisk)} from failed transaction amounts`, type: 'danger', delay: 4800 },
+    { time: '+5s', icon: '🧠', title: 'Recovery strategy generated', desc: noData ? 'Strategy ready once data arrives' : `Est. ${formatCurrency(f.recoverLow)}–${formatCurrency(f.recoverHigh)} via payment links`, type: 'success', delay: 6000 },
+    { time: '+6s', icon: '👤', title: 'Merchant approval requested', desc: 'Waiting for approval to proceed', type: 'warning', delay: 7200 },
+    { time: '+7s', icon: '✅', title: 'Recovery campaign launched', desc: 'Eligible customers contacted via SMS + Email', type: 'success', delay: 8400 },
+    { time: '+13s', icon: '💰', title: 'Payments being recovered', desc: 'Response rate tracked against the modelled 60–80% range', type: 'success', delay: 9600 },
+    { time: '+25s', icon: '💰', title: 'Recovery progressing', desc: 'More customers responding to links', type: 'success', delay: 10800 },
+    { time: '+39s', icon: '🎉', title: 'Campaign complete', desc: noData ? 'Recovery flow finished' : `Reconciled against ${formatCurrency(f.revenueAtRisk)} at-risk ledger`, type: 'success', delay: 12000 },
+  ];
+}
 
 export default function Timeline() {
-  const { timeline } = useAppState();
+  const { timeline, analysis, insights } = useAppState();
   const ref = useRef(null);
   const [replaying, setReplaying] = useState(false);
   const [replayItems, setReplayItems] = useState([]);
   const [replayIdx, setReplayIdx] = useState(-1);
+  const REPLAY_STEPS = useMemo(() => makeReplaySteps(insights), [analysis, insights]);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -40,8 +48,8 @@ export default function Timeline() {
     setReplaying(true);
     setReplayItems([]);
     for (let i = 0; i < REPLAY_STEPS.length; i++) {
-      await new Promise(r => setTimeout(r, i === 0 ? 400 : REPLAY_STEPS[i].delay - REPLAY_STEPS[i - 1].delay));
-      setReplayItems(prev => [...prev, REPLAY_STEPS[i]]);
+      await new Promise((r) => setTimeout(r, i === 0 ? 400 : Math.max(300, REPLAY_STEPS[i].delay - REPLAY_STEPS[i - 1].delay)));
+      setReplayItems((prev) => [...prev, REPLAY_STEPS[i]]);
       setReplayIdx(i);
     }
     setReplaying(false);

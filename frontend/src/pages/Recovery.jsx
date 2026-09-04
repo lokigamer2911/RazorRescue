@@ -12,7 +12,7 @@ const MODES = [
 ];
 
 export default function Recovery() {
-  const { autopilotMode, setAutopilotMode, addTimelineEntry, recoveryData, setRecoveryData, recoveryActive, setRecoveryActive, saveCampaign, saveAction, activeIncident } = useAppState();
+  const { analysis, insights, autopilotMode, setAutopilotMode, addTimelineEntry, recoveryData, setRecoveryData, recoveryActive, setRecoveryActive, saveCampaign, saveAction, activeIncident } = useAppState();
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Ready');
   const ref = useRef(null);
@@ -31,13 +31,16 @@ export default function Recovery() {
     saveCampaign({ incidentId: activeIncident?.id || null, status: 'running', customersContacted: 0, paymentsRecovered: 0, amountRecovered: 0, recoveryRate: 0, startedAt: new Date().toISOString() });
     saveAction({ type: 'recovery', title: 'Recovery campaign launched', description: 'Sending payment links', riskLevel: 'low', status: 'completed' });
 
-    const total = 312;
+    // Campaign targets derive from the LIVE analysis snapshot — never hardcoded.
+    const total = Math.max(1, insights.eligible || Math.round((analysis?.failed || 0) * 0.8) || 1);
+    const amountTarget = Math.max(1, insights.recoverMid || Math.round((analysis?.revenueAtRisk || 0) * 0.7) || 1);
+    const recoveredTarget = Math.max(1, Math.round(total * 0.55));
     let contacted = 0, recovered = 0, amount = 0;
     for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
       contacted = Math.min(total, Math.round(total * (i + 1) / 12));
-      recovered = Math.min(150, recovered + Math.round(3 + Math.random() * 15));
-      amount = Math.min(49200, amount + Math.round(1200 + Math.random() * 3600));
+      recovered = Math.min(recoveredTarget, recovered + Math.round(3 + Math.random() * Math.max(2, Math.round(recoveredTarget / 18))));
+      amount = Math.min(amountTarget, amount + Math.round(Math.max(300, amountTarget / 40) + Math.random() * Math.max(300, amountTarget / 16)));
       const prog = Math.min(100, Math.round((contacted / total) * 100));
       setProgress(prog);
       setRecoveryData({ customersContacted: contacted, paymentsRecovered: recovered, amountRecovered: amount, recoveryRate: contacted > 0 ? Math.round((recovered / contacted) * 100) : 0, progress: prog });
@@ -45,7 +48,7 @@ export default function Recovery() {
       if (recovered > 40 && i === 6) addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '💰', title: `${formatCurrency(amount)} recovered`, desc: `${recovered} payments recovered`, type: 'success' });
     }
     setStatus('Complete');
-    addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🎉', title: `Complete — ${formatCurrency(amount)} recovered`, desc: `Rate: ${Math.round((recovered / total) * 100)}%`, type: 'success' });
+    addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🎉', title: `Complete — ${formatCurrency(amount)} recovered`, desc: `Rate: ${Math.round((recovered / total) * 100)}% of ${total.toLocaleString('en-IN')} contacted`, type: 'success' });
     saveCampaign({ incidentId: activeIncident?.id || null, status: 'complete', customersContacted: contacted, paymentsRecovered: recovered, amountRecovered: amount, recoveryRate: Math.round((recovered / total) * 100), completedAt: new Date().toISOString() });
     saveAction({ type: 'recovery-complete', title: `Recovery complete: ${formatCurrency(amount)}`, description: `${recovered}/${total} customers responded`, riskLevel: 'low', status: 'completed', revenueRecovered: amount });
   };

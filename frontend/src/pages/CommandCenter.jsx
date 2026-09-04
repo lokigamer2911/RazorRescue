@@ -7,7 +7,7 @@ import { animate, stagger } from 'animejs';
 import clsx from 'clsx';
 
 export default function CommandCenter({ setView }) {
-  const { analysis, estimatedRecovery, autoDemoRunning, runAutoDemo } = useAppState();
+  const { analysis, insights, estimatedRecovery, autoDemoRunning, runAutoDemo } = useAppState();
   const cardsRef = useRef(null);
 
   // ALL data comes from analysis — zero hardcoded values
@@ -70,7 +70,7 @@ export default function CommandCenter({ setView }) {
               <span className="badge-sm badge-emerald">AI Ready</span>
             </div>
             <div className="stat-number text-[40px] text-emerald-600">{formatCurrency(estimatedRecovery)}</div>
-            <p className="text-[12px] text-gray-400 mt-1 mb-4">Recovery rate: 67-79% expected</p>
+            <p className="text-[12px] text-gray-400 mt-1 mb-4">Est. {formatCurrency(insights.recoverLow)}–{formatCurrency(insights.recoverHigh)} recoverable ({insights.eligible.toLocaleString('en-IN')} eligible customers)</p>
             <div className="progress-track">
               <div className="progress-fill bg-emerald-500 bar-fill" data-w={`${revenueAtRisk > 0 ? (estimatedRecovery / revenueAtRisk * 100) : 0}%`} style={{ width: '0%' }} />
             </div>
@@ -131,11 +131,11 @@ export default function CommandCenter({ setView }) {
                 <Brain weight="fill" className="w-4 h-4 text-blue-600" />
                 <span className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">AI Recommendation</span>
               </div>
-              <span className="badge-sm badge-blue">91% confidence</span>
+              <span className="badge-sm badge-blue">{insights.confidence}% confidence</span>
             </div>
             <p className="text-[14px] text-gray-600 leading-relaxed mb-5">
-              Found <span className="font-semibold text-gray-900">{Math.round(totalFailed * 0.73)} affected customers</span> across {topBanks.length} banks.{' '}
-              <span className="font-semibold text-gray-900">{formatCurrency(estimatedRecovery)}</span> is potentially recoverable through payment link resends with alternate method suggestions.
+              Found <span className="font-semibold text-gray-900">{insights.eligible.toLocaleString('en-IN')} eligible customers</span> across {topBanks.length} banks (from {totalFailed.toLocaleString('en-IN')} failures).{' '}
+              <span className="font-semibold text-gray-900">{formatCurrency(estimatedRecovery)}</span> is the mid-point estimate recoverable through payment link resends with alternate method suggestions.
             </p>
             <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl mb-5">
               <Shield weight="fill" className="w-4 h-4 text-emerald-600 flex-shrink-0" />
@@ -168,12 +168,12 @@ export default function CommandCenter({ setView }) {
             </div>
             <div className="space-y-2.5">
               {[
-                `Detected ${totalFailed} failed transactions`,
-                `Compared against 7-day baseline`,
-                `Identified ${topBanks.length > 0 ? topBanks[0].name : 'primary'} as top failing bank`,
+                `Detected ${totalFailed.toLocaleString('en-IN')} failed transactions (${totalTxns > 0 ? ((totalFailed / totalTxns) * 100).toFixed(1) : 0}% failure rate)`,
+                `Concentration: top 3 banks hold ${insights.concentration.toFixed(0)}% of failures`,
+                `Identified ${insights.worstBank ? `${insights.worstBank.name} (${insights.worstBank.rate.toFixed(1)}% rate)` : 'primary'} as worst bank by failure rate`,
                 `Calculated ${formatCurrency(revenueAtRisk)} revenue at risk`,
-                `Found ${Math.round(totalFailed * 0.73)} eligible customers`,
-                `Generated recovery strategy`,
+                `Found ${insights.eligible.toLocaleString('en-IN')} eligible customers (modelled 80% reachable)`,
+                `Generated recovery strategy — est. ${formatCurrency(insights.recoverLow)}–${formatCurrency(insights.recoverHigh)}`,
               ].map((text, i) => (
                 <div key={i} className="flex items-center gap-3 py-1 text-[12px] text-gray-500">
                   <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0">

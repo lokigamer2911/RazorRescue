@@ -65,6 +65,17 @@ export const schemas = {
   consult: {
     prompt: { type: 'string', required: true, maxLength: 4000 },
     model: { type: 'string', maxLength: 100, default: 'anthropic/claude-sonnet-4' },
+    sessionId: { type: 'string', maxLength: 64, default: 'default' },
+  },
+  query: {
+    prompt: { type: 'string', required: true, maxLength: 4000 },
+    sessionId: { type: 'string', maxLength: 64, default: 'default' },
+  },
+  context: {
+    sessionId: { type: 'string', maxLength: 64, default: 'default' },
+    analysis: { type: 'object', required: true },
+    merchant: { type: 'object' },
+    incidents: { type: 'object' },
   },
   generateTransactions: {
     count: { type: 'number', min: 100, max: 100000, default: 10000 },
