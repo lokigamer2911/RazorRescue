@@ -5,7 +5,7 @@
 // output is always traceable to the DATA snapshot.
 
 import { getSnapshot, deriveFacts, renderDataset, snapshotSummary } from './contextStore.js';
-import { ROSTER, classifyIntent, planAgents, systemPromptFor, engineSummary } from './agents.js';
+import { ROSTER, classifyIntent, planAgents, systemPromptFor, engineSummary, isModelSpendFree, isPaidAllowed } from './agents.js';
 import { chatCompletion } from './openrouter.js';
 
 const hasKey = () => Boolean(process.env.OPENROUTER_API_KEY);
@@ -42,9 +42,10 @@ export async function orchestrate({ prompt, sessionId = 'default' }) {
     let output = null;
     let usedModel = agent.model;
     if (hasKey()) {
-      // Try the primary model, then each fallback in order (resilience to
-      // retired/rate-limited model ids on OpenRouter).
-      for (const m of [agent.model, ...(agent.fallbacks || [])]) {
+      // ZERO-SPEND POLICY: only :free endpoints run unless ALLOW_PAID_MODELS=true.
+      const candidates = [agent.model, ...(agent.fallbacks || [])].filter((m) => isModelSpendFree(m) || isPaidAllowed());
+      // Try each candidate in order (resilience to retired/rate-limited ids).
+      for (const m of candidates) {
         try {
           const llm = await chatCompletion(
             `${dataBlock}\n\nUser question: ${prompt}\n\nProduce your specialist analysis now.`,
@@ -83,7 +84,8 @@ export async function orchestrate({ prompt, sessionId = 'default' }) {
   let chiefMode = 'engine';
   let chiefModel = ROSTER.chief.model;
   if (hasKey()) {
-    for (const m of [ROSTER.chief.model, ...(ROSTER.chief.fallbacks || [])]) {
+    const chiefCandidates = [ROSTER.chief.model, ...(ROSTER.chief.fallbacks || [])].filter((m) => isModelSpendFree(m) || isPaidAllowed());
+    for (const m of chiefCandidates) {
       try {
         const chief = await chatCompletion(
           `${dataBlock}\n\nSpecialist outputs:\n${blocks}\n\nUser question: ${prompt}\n\nProduce the final unified answer now.`,

@@ -21,26 +21,42 @@ HARD RULES (never violate):
 
 // ─── ROSTER ─────────────────────────────────────────────────────────────────
 
+// ─── ZERO-SPEND POLICY ───────────────────────────────────────────────────────
+// RazorRescue runs on OpenRouter `:free` endpoints ONLY. No call ever costs
+// money: the orchestrator refuses to invoke any model id that does not end in
+// `:free` unless ALLOW_PAID_MODELS=true is set deliberately for a paid demo.
+// When free models are rate-limited or unavailable, the deterministic engine
+// answers instead (instant, zero cost, still fully data-grounded).
+
+export function isModelSpendFree(modelId) {
+  return String(modelId || '').includes(':free');
+}
+
+export function isPaidAllowed() {
+  return process.env.ALLOW_PAID_MODELS === 'true';
+}
+
 export const ROSTER = {
   router: {
     id: 'router', name: 'Intent Router', model: null, role: 'Classifies the user question and selects the specialist agents to run.',
   },
   pattern: {
-    id: 'pattern', name: 'Pattern Detector', model: 'openai/gpt-4o-mini', fallbacks: ['anthropic/claude-haiku-4.5'], role: 'Detects failure patterns: worst banks, peak hours, methods, dominant reasons.',
+    id: 'pattern', name: 'Pattern Detector', model: 'google/gemma-4-26b-a4b-it:free', fallbacks: ['minimax/minimax-m2.7:free'], role: 'Detects failure patterns: worst banks, peak hours, methods, dominant reasons.',
   },
   risk: {
-    id: 'risk', name: 'Risk Assessor', model: 'anthropic/claude-haiku-4.5', fallbacks: ['openai/gpt-4o-mini'], role: 'Quantifies revenue at risk, concentration, and severity per bank.',
+    id: 'risk', name: 'Risk Assessor', model: 'inclusionai/ling-3.0-flash-fin:free', fallbacks: ['google/gemma-4-26b-a4b-it:free'], role: 'Quantifies revenue at risk, concentration, and severity per bank (finance-tuned model).',
   },
   recovery: {
-    id: 'recovery', name: 'Recovery Planner', model: 'anthropic/claude-sonnet-4', fallbacks: ['openai/gpt-4o-mini'], role: 'Builds a safe recovery plan from exact at-risk amounts and eligible customers.',
+    id: 'recovery', name: 'Recovery Planner', model: 'google/gemma-4-31b-it:free', fallbacks: ['minimax/minimax-m2.7:free'], role: 'Builds a safe recovery plan from exact at-risk amounts and eligible customers.',
   },
   chief: {
-    id: 'chief', name: 'Chief Analyst', model: 'anthropic/claude-sonnet-4', fallbacks: ['openai/gpt-4o-mini'], role: 'Synthesises every specialist output into one clear, final answer.',
+    id: 'chief', name: 'Chief Analyst', model: 'google/gemma-4-31b-it:free', fallbacks: ['minimax/minimax-m2.7:free'], role: 'Synthesises every specialist output into one clear, final answer.',
   },
 };
 
-// Models an agent tries in order. Kept current with OpenRouter's public catalog
-// so a retired model id degrades to a live model — not silently to demo mode.
+// Models an agent tries in order. All are OpenRouter :free endpoints (zero cost);
+// if every free attempt fails or is rate-limited the agent falls back to its
+// deterministic engine — never to a paid model.
 
 // ─── INTENT ROUTER (deterministic — zero cost, instant) ────────────────────
 
@@ -115,7 +131,7 @@ function engineFor(agentId, facts) {
   const lines = [];
   switch (agentId) {
     case 'pattern': {
-      lines.push(`**Overall:** ${facts.failed.toLocaleString('en-IN')} of ${facts.total.toLocaleString('en-IN')} transactions failed (${pct1(facts.total ? (facts.failed / facts.total) * 100 : 0)}% failure rate) in the current snapshot.`);
+      lines.push(`**Overall:** ${facts.failed.toLocaleString('en-IN')} of ${facts.total.toLocaleString('en-IN')} transactions failed (${pct1(facts.total ? (facts.failed / facts.total) * 100 : 0)} failure rate) in the current snapshot.`);
       if (facts.worstBank) lines.push(`**Worst bank by rate:** ${facts.worstBank.name} at ${pct1(facts.worstBank.rate)} failure rate (${facts.worstBank.failed} failures of ${facts.worstBank.total} txns).`);
       if (facts.topBanks.length) lines.push(`**Most failures:** ${facts.topBanks.slice(0, 3).map((b) => `${b.name} (${b.failed})`).join(', ')}.`);
       if (facts.peakWindow) lines.push(`**Peak window:** ${String(facts.peakWindow.start).padStart(2, '0')}:00–${String(facts.peakWindow.end).padStart(2, '0')}:59 with ${facts.peakWindow.failed} failures (${pct1(facts.peakWindow.share)} of all failures).`);

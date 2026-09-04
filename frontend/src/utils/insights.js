@@ -6,7 +6,7 @@ import { formatCurrency } from './simulation';
 export function deriveInsights(analysis) {
   const empty = {
     total: 0, failed: 0, successRate: 0, failedRate: 0, revenueAtRisk: 0,
-    byBank: [], worstBank: null, concentration: 0,
+    byBank: [], topBanks: [], worstBank: null, concentration: 0,
     peakWindow: null, peakFailed: 0, peakShare: 0,
     topMethods: [], avgTicket: 0, topReasons: [],
     confidence: 0, eligible: 0, recoverLow: 0, recoverHigh: 0, recoverMid: 0,
@@ -58,11 +58,13 @@ export function deriveInsights(analysis) {
   const recoverMid = Math.round((recoverLow + recoverHigh) / 2);
   const confidence = Math.min(96, Math.max(62, Math.round(55 + concentration * 0.32 + (peakWindow ? peakWindow.share * 0.18 : 0))));
 
+  // topBanks mirrors the backend deriveFacts() naming (banks sorted by failure count).
+  const topBanks = [...byBank].sort((a, b) => (b.failed || 0) - (a.failed || 0));
   return {
     total, failed, successRate: analysis.successRate ? Number(analysis.successRate) : ((total - failed) / total) * 100,
     failedRate: (failed / total) * 100,
     revenueAtRisk: risk,
-    byBank,
+    byBank, topBanks,
     worstBank, concentration,
     peakWindow,
     peakFailed: peakWindow ? peakWindow.failed : 0,

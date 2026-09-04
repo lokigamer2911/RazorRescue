@@ -45,18 +45,23 @@ User question
 └──────────────────┘   |patterns|summary|general  └──────────────────┘
    │  planAgents(intent)
    ▼
-Specialists run IN PARALLEL (Promise.all)
+Specialists run IN PARALLEL (Promise.all) — ZERO-SPEND POLICY:
+all models are OpenRouter `:free` endpoints; no paid call ever fires
+unless ALLOW_PAID_MODELS=true is deliberately set.
 ┌─────────────────────────┬─────────────────────────┬─────────────────────────┐
 │ Pattern Detector        │ Risk Assessor           │ Recovery Planner        │
-│ openai/gpt-4o-mini      │ claude-haiku-3.5        │ claude-sonnet-4         │
+│ gemma-4-26b-a4b-it:free │ ling-3.0-flash-fin:free │ gemma-4-31b-it:free     │
 │ worst banks by rate,    │ ₹ at risk, per-bank     │ eligible customers,     │
 │ peak windows, methods,  │ severity, top-3         │ recoverable range,      │
 │ reasons                 │ concentration           │ safe actions            │
 └──────────────┬──────────┴────────────┬────────────┴────────────┬────────────┘
                ▼                       ▼                         ▼
-        outputs → fed to Chief Analyst (claude-sonnet-4)
+        outputs → fed to Chief Analyst (gemma-4-31b-it:free)
                ▼
      Unified final answer + pipeline trace + confidence
+
+If every free endpoint is rate-limited/unavailable, the affected agent
+answers from its deterministic engine (instant, zero cost, still grounded).
 ```
 
 ### Hard rules every agent prompt enforces

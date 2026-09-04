@@ -67,11 +67,23 @@ const ERROR_MESSAGES = {
   'auth/requires-recent-login': 'Please sign in again to make this change.',
   'auth/popup-blocked': 'The popup was blocked — allow popups for this site and try again.',
   'auth/network-request-failed': 'Network error. Check your connection and try again.',
+  'auth/argument-error': 'Phone sign-in could not start in this browser. Try the deployed site over https, or use email instead.',
+  'auth/captcha-check-failed': 'Could not verify you are human — refresh the page and try again.',
+  'auth/missing-recaptcha-token': 'Phone sign-in needs Google reCAPTCHA, which is blocked in this browser. Try email, or the deployed site over https.',
+  'auth/missing-verification-code': 'Enter the code we sent you.',
 };
 
+/** Fall back to friendly copy for ANY unknown Firebase auth error — never leak raw SDK text. */
+function isRawFirebaseMessage(message) {
+  return /^Firebase: /.test(message || '');
+}
+
 export function friendlyAuthError(error) {
-  const code = error?.code || error?.message || '';
-  return ERROR_MESSAGES[code] || (error?.message ? error.message : 'Something went wrong. Try again.');
+  const code = error?.code || '';
+  const message = error?.message || '';
+  if (ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];
+  if (typeof code === 'string' && code.startsWith('auth/')) return 'Something went wrong. Please try again in a moment.';
+  return isRawFirebaseMessage(message) ? 'Something went wrong. Please try again in a moment.' : message || 'Something went wrong. Try again.';
 }
 
 /** True when the user record was created in this exact sign-in (brand-new account). */

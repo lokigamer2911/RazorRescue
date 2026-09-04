@@ -27,6 +27,8 @@ export default function App() {
   return (
     <AuthProvider>
       <AppInner />
+      {/* Mount point for Firebase reCAPTCHA (invisible) used by phone OTP sign-in/linking. */}
+      <div id="phone-recaptcha" aria-hidden="true" style={{ position: 'fixed', left: '-9999px', width: '0', height: '0', overflow: 'hidden' }} />
     </AuthProvider>
   );
 }

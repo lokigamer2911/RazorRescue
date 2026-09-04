@@ -92,20 +92,15 @@ router.post('/generate-incident', validate('generateIncident'), (req, res) => {
   }
 });
 
-// Available models — informational roster with capabilities
+// Available models — informational roster. ZERO-SPEND POLICY: all agents run on
+// OpenRouter :free endpoints only (never a paid model) unless ALLOW_PAID_MODELS=true.
 router.get('/models', (_req, res) => {
   res.json([
-    { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', role: 'Chief Analyst & Recovery Planner', capability: 'Final synthesis of all agent outputs and recovery plan generation.' },
-    { id: 'openai/gpt-4o', name: 'GPT-4o', role: 'Lead Pattern Detector', capability: 'Deep pattern extraction across banks, hours and methods.' },
-    { id: 'google/gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro', role: 'Data Synthesizer', capability: 'Cross-section synthesis of large transaction slices.' },
-    { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', role: 'Fast Risk Assessor', capability: 'Low-latency risk scoring used for risk intents (fallback: GPT-4o Mini).' },
-    { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', role: 'Pattern Detector (default)', capability: 'Default specialist for failure-pattern intents.' },
-    { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', role: 'Deep Reasoner', capability: 'Step-by-step root-cause reasoning for investigations.' },
-    { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', role: 'Speed Analyst', capability: 'Near-instant pattern summaries for live dashboards.' },
-    { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick', role: 'Risk Assessor', capability: 'Alternate risk ranking with severity classification.' },
-    { id: 'qwen/qwen3-235b-a22b', name: 'Qwen 3 235B', role: 'Quantitative Analyst', capability: 'Precise monetary computations and recovery math checks.' },
-    { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini', role: 'Narrative Generator', capability: 'Merchant-facing plain-language summaries.' },
-    { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', role: 'Incident Monitor', capability: 'Continuous incident triage and alerting.' },
-    { id: 'mistralai/mistral-small-3.2-24b', name: 'Mistral Small 3.2', role: 'Compliance Checker', capability: 'Validates every proposed action against safety policy.' },
-  ]);
+    { id: 'google/gemma-4-31b-it:free', name: 'Gemma 4 31B (free)', role: 'Chief Analyst & Recovery Planner', capability: 'Final synthesis of all agent outputs and recovery plan generation.' },
+    { id: 'google/gemma-4-26b-a4b-it:free', name: 'Gemma 4 26B (free)', role: 'Pattern Detector (default)', capability: 'Default specialist for failure-pattern intents.' },
+    { id: 'inclusionai/ling-3.0-flash-fin:free', name: 'Ling 3.0 Flash Finance (free)', role: 'Fast Risk Assessor', capability: 'Finance-tuned risk scoring used for risk intents.' },
+    { id: 'minimax/minimax-m2.7:free', name: 'MiniMax M2.7 (free)', role: 'Fallback specialist', capability: 'Backup model if the primary free endpoint is rate-limited.' },
+  ].concat(process.env.ALLOW_PAID_MODELS === 'true'
+    ? [{ id: '(paid tier)', name: 'Claude / GPT premium models', role: 'Optional demo tier', capability: 'Enabled only when ALLOW_PAID_MODELS=true is set deliberately.' }]
+    : []));
 });
