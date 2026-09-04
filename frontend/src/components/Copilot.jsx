@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ChatCircleText, X, PaperPlaneRight, Sparkle, CheckCircle } from '@phosphor-icons/react';
 import { useAppState } from '../hooks/useAppState';
 import { api } from '../utils/api';
@@ -32,7 +32,7 @@ export default function Copilot({ open, onToggle }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
-  const { analysis, insights } = useAppState();
+  const { analysis, insights, userId } = useAppState();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,7 +46,7 @@ export default function Copilot({ open, onToggle }) {
     setLoading(true);
 
     try {
-      const result = await api.query(q);
+      const result = await api.query(q, userId);
 
       if (result && result.answer) {
         const pipeline = Array.isArray(result.pipeline) ? result.pipeline : [];
@@ -91,17 +91,16 @@ export default function Copilot({ open, onToggle }) {
 
   return (
     <>
-      <motion.button onClick={onToggle}
-        className="fixed right-6 bottom-6 z-50 w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-200 flex items-center justify-center hover:shadow-xl hover:shadow-blue-200 transition-shadow"
-        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-        <ChatCircleText weight="fill" className="w-6 h-6 text-white" />
-      </motion.button>
+      {!open && (
+        <motion.button onClick={onToggle}
+          className="fixed right-6 bottom-6 z-50 w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-200 flex items-center justify-center hover:shadow-xl hover:shadow-blue-200 transition-shadow"
+          whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <ChatCircleText weight="fill" className="w-6 h-6 text-white" />
+        </motion.button>
+      )}
 
-      <AnimatePresence>
-        {open && (
-          <motion.div className="fixed right-0 top-0 bottom-0 w-[400px] z-40 bg-white border-l border-gray-200 flex flex-col shadow-2xl"
-            initial={{ x: 400 }} animate={{ x: 0 }} exit={{ x: 400 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}>
+      {open && (
+        <div className={`fixed right-0 top-0 bottom-0 w-[400px] z-40 bg-white border-l border-gray-200 flex flex-col shadow-2xl transition-transform duration-300 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}>
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
@@ -197,9 +196,8 @@ export default function Copilot({ open, onToggle }) {
                 </button>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </>
   );
 }

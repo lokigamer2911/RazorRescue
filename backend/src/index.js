@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { router as apiRouter } from './routes/api.js';
+import { router as gatewayRouter } from './routes/gateway.js';
 import { initDB, saveIncident, saveAIAction, saveRecoveryCampaign, getMerchantStats, getAuditLog } from './services/database.js';
 import { apiLimiter, validate } from './middleware/security.js';
 
@@ -39,6 +40,9 @@ app.get('/api/health', (_req, res) => {
 
 // AI Agent routes
 app.use('/api/agent', apiRouter);
+
+// Payment gateway routes (Firebase-auth protected)
+app.use('/api/gateway', gatewayRouter);
 
 // Database routes with validation
 app.get('/api/stats', async (_req, res) => {

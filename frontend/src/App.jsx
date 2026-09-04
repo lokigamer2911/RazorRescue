@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import Spinner from './components/Spinner';
 import Landing from './pages/Landing';
@@ -7,19 +7,20 @@ import CommandCenter from './pages/CommandCenter';
 import Investigation from './pages/Investigation';
 import Recovery from './pages/Recovery';
 import Timeline from './pages/Timeline';
-import Simulator from './pages/Simulator';
 import Settings from './pages/Settings';
+import ConnectGateway from './pages/ConnectGateway';
 import Sidebar from './components/Sidebar';
 import Copilot from './components/Copilot';
 import { AppStateProvider } from './hooks/useAppState';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { getIdToken } from 'firebase/auth';
+import { api, setAuthToken } from './utils/api';
 
 const VIEWS = {
   'command-center': CommandCenter,
   investigation: Investigation,
   recovery: Recovery,
   timeline: Timeline,
-  simulate: Simulator,
   settings: Settings,
 };
 
@@ -36,6 +37,44 @@ export default function App() {
 function AppInner() {
   const { user, initializing, logout, processVerificationLink } = useAuth();
   const [page, setPage] = useState('landing'); // 'landing' | 'auth' | 'dashboard'
+  const [authMode, setAuthMode] = useState('login');
+  const [view, setView] = useState('command-center');
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  // gatewayState: 'checking' | 'none' | 'connected'
+  const [gatewayState, setGatewayState] = useState('checking');
+
+  // Keep the API layer authenticated with a fresh Firebase ID token.
+  useEffect(() => {
+    if (!user) {
+      setAuthToken(null);
+      return undefined;
+    }
+    let cancelled = false;
+    getIdToken(user).then((token) => {
+      if (!cancelled) setAuthToken(token);
+    });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Check gateway connection when entering the dashboard.
+  const checkGateway = useCallback(async () => {
+    setGatewayState('checking');
+    try {
+      const status = await api.gatewayStatus();
+      setGatewayState(status && status.connected ? 'connected' : 'none');
+    } catch {
+      setGatewayState('none');
+    }
+  }, []);
+
+  const goAuth = (mode) => {
+    setAuthMode(mode);
+    setPage('auth');
+  };
+
+  useEffect(() => {
+    if (page === 'dashboard' && user) checkGateway();
+  }, [page, user, checkGateway]);
 
   // Opened from an email-verification link (?mode=verifyEmail&oobCode=…):
   // confirm the code, then a verified signed-in user lands on the dashboard.
@@ -48,14 +87,6 @@ function AppInner() {
       cancelled = true;
     };
   }, [processVerificationLink]);
-  const [authMode, setAuthMode] = useState('login');
-  const [view, setView] = useState('command-center');
-  const [copilotOpen, setCopilotOpen] = useState(false);
-
-  const goAuth = (mode) => {
-    setAuthMode(mode);
-    setPage('auth');
-  };
 
   if (initializing) {
     return (
@@ -87,10 +118,31 @@ function AppInner() {
     );
   }
 
+  // Signed in — checking gateway connection, or onboarding the merchant.
+  if (gatewayState === 'checking') {
+    return (
+      <div className="h-screen w-screen bg-white flex flex-col items-center justify-center gap-3">
+        <Spinner className="w-6 h-6 text-blue-600" />
+        <span className="text-[12px] text-gray-400">Checking your account…</span>
+      </div>
+    );
+  }
+
+  if (gatewayState === 'none') {
+    return (
+      <ConnectGateway
+        onConnected={async () => {
+          const status = await api.gatewayStatus();
+          setGatewayState(status && status.connected ? 'connected' : 'none');
+        }}
+      />
+    );
+  }
+
   const CurrentView = VIEWS[view];
 
   return (
-    <AppStateProvider>
+    <AppStateProvider userId={user.uid}>
       <div className="h-screen w-screen flex overflow-hidden bg-gray-50">
         <Sidebar
           view={view}
@@ -98,6 +150,7 @@ function AppInner() {
           onHome={() => setPage('landing')}
           onLogout={async () => {
             await logout();
+            setAuthToken(null);
             setView('command-center');
             setPage('landing');
           }}

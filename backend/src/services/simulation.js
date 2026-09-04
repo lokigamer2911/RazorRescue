@@ -65,11 +65,21 @@ export function analyseTransactions(transactions) {
     byHour[t.hour].total++;
     if (t.status === 'failed') byHour[t.hour].failed++;
   });
+  const byMethod = {};
+  failed.forEach(t => {
+    if (!byMethod[t.method]) byMethod[t.method] = { count: 0, amount: 0 };
+    byMethod[t.method].count++;
+    byMethod[t.method].amount += t.amount;
+  });
   return {
     total, failed: failed.length, successRate: ((total - failed.length) / total * 100).toFixed(1),
     revenueAtRisk: failed.reduce((s, t) => s + t.amount, 0),
     byBank: Object.values(byBank).sort((a, b) => b.failed - a.failed),
-    byHour, topFailed: failed.slice(0, 20),
+    byHour, byMethod,
+    topFailed: failed.slice(0, 20),
+    hourlyData: Object.entries(byHour)
+      .map(([h, d]) => ({ hour: parseInt(h), total: d.total, failed: d.failed, rate: d.total > 0 ? (d.failed / d.total * 100).toFixed(1) : 0 }))
+      .sort((a, b) => a.hour - b.hour),
   };
 }
 

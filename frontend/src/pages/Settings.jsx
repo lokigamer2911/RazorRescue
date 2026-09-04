@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { GearSix as SettingsIcon, Shield, Storefront, UserCircle, Phone, DeviceMobile, SealCheck, Envelope } from '@phosphor-icons/react';
+import { GearSix as SettingsIcon, Shield, Storefront, UserCircle, Phone, DeviceMobile, SealCheck, Envelope, LinkSimple, CheckCircle, XCircle, ArrowClockwise } from '@phosphor-icons/react';
 import Spinner from '../components/Spinner';
 import { useAppState } from '../hooks/useAppState';
 import { useAuth, friendlyAuthError, isPhone, normalizePhone } from '../hooks/useAuth';
+import { api } from '../utils/api';
 import { animate, stagger } from 'animejs';
 
 const POLICIES = [
@@ -15,16 +16,20 @@ const POLICIES = [
 ];
 
 export default function Settings() {
-  const { merchant, setMerchant } = useAppState();
+  const { merchant, setMerchant, refreshData, dataLoading } = useAppState();
   const auth = useAuth();
   const user = auth.user;
 
   const [name, setName] = useState(user?.displayName || '');
   const [savedName, setSavedName] = useState(false);
-  const [merchantName, setMerchantName] = useState(merchant.name);
-  const [revenue, setRevenue] = useState('10,00,000');
-  const [txns, setTxns] = useState('10000');
+  const [gateway, setGateway] = useState(null); // { connected, provider, merchantName, lastSyncAt }
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [gatewayMsg, setGatewayMsg] = useState('');
   const cardsRef = useRef(null);
+
+  useEffect(() => {
+    api.gatewayStatus().then((s) => setGateway(s)).catch(() => setGateway({ connected: false }));
+  }, []);
 
   /* phone linking state */
   const [phone, setPhone] = useState('');
@@ -41,8 +46,19 @@ export default function Settings() {
     return () => c.pause();
   }, []);
 
-  const saveMerchant = () =>
-    setMerchant({ name: merchantName, potentialRevenue: parseInt(revenue.replace(/,/g, '')), totalTransactions: parseInt(txns) });
+  const disconnectGateway = async () => {
+    setDisconnecting(true);
+    setGatewayMsg('');
+    try {
+      await api.gatewayDisconnect();
+      setGateway({ connected: false });
+      setGatewayMsg('Gateway disconnected. Your payment data is no longer synced.');
+    } catch {
+      setGatewayMsg('Could not disconnect right now.');
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
   const saveName = async () => {
     setBusy(true);
@@ -192,27 +208,51 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Merchant */}
+        {/* Payment Gateway */}
         <div className="card-clean p-6 reveal-card" style={{ opacity: 0 }}>
           <div className="flex items-center gap-2 mb-5">
             <Storefront weight="fill" className="w-4 h-4 text-blue-600" />
-            <span className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Merchant Profile</span>
+            <span className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Payment Gateway</span>
           </div>
-          <div className="space-y-4">
-            <div>
-              <label className="text-[11px] text-gray-500 mb-1.5 block">Name</label>
-              <input value={merchantName} onChange={(e) => setMerchantName(e.target.value)} className={inputCls} />
+          {gateway && gateway.connected ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                <CheckCircle weight="fill" className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[12.5px] font-semibold text-gray-800 capitalize">{gateway.provider} connected</p>
+                  <p className="text-[11px] text-gray-500 truncate">{gateway.merchantName || 'Live account'}</p>
+                </div>
+              </div>
+              {gateway.lastSyncAt && (
+                <p className="text-[10.5px] text-gray-400">Last synced {new Date(gateway.lastSyncAt).toLocaleString('en-IN')}</p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => { refreshData(); api.gatewayStatus().then(setGateway).catch(() => {}); setGatewayMsg('Syncing your latest payments…'); }}
+                  disabled={dataLoading}
+                  className="flex-1 py-2.5 btn-secondary text-[12px] flex items-center justify-center gap-1.5 disabled:opacity-60">
+                  <ArrowClockwise weight="fill" className="w-3.5 h-3.5" /> {dataLoading ? 'Syncing…' : 'Sync now'}
+                </button>
+                <button onClick={disconnectGateway} disabled={disconnecting}
+                  className="px-4 py-2.5 rounded-xl border border-red-200 text-red-600 text-[12px] font-medium hover:bg-red-50 transition-all disabled:opacity-60 whitespace-nowrap">
+                  {disconnecting ? <Spinner className="w-3.5 h-3.5" /> : 'Disconnect'}
+                </button>
+              </div>
             </div>
-            <div>
-              <label className="text-[11px] text-gray-500 mb-1.5 block">Potential Revenue</label>
-              <input value={revenue} onChange={(e) => setRevenue(e.target.value)} className={inputCls} />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl">
+                <XCircle weight="fill" className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                <p className="text-[12px] text-gray-500">No gateway connected — analytics are paused.</p>
+              </div>
+              <button onClick={() => window.location.reload()}
+                className="w-full py-2.5 btn-primary text-[12px] flex items-center justify-center gap-1.5">
+                <LinkSimple weight="fill" className="w-3.5 h-3.5" /> Connect a payment gateway
+              </button>
             </div>
-            <div>
-              <label className="text-[11px] text-gray-500 mb-1.5 block">Transactions</label>
-              <input type="number" value={txns} onChange={(e) => setTxns(e.target.value)} className={inputCls} />
-            </div>
-            <button onClick={saveMerchant} className="w-full py-2.5 btn-primary text-[12px]">Save Changes</button>
-          </div>
+          )}
+          {gatewayMsg && (
+            <p className="mt-3 text-[11px] text-gray-500">{gatewayMsg}</p>
+          )}
         </div>
 
         {/* Policies */}

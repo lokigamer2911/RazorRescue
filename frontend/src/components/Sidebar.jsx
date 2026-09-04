@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { SquaresFour, MagnifyingGlass, CurrencyInr, Clock, Flask, GearSix, Lightning, ArrowLeft, SignOut } from '@phosphor-icons/react';
+import { SquaresFour, MagnifyingGlass, CurrencyInr, Clock, GearSix, Lightning, ArrowLeft, SignOut } from '@phosphor-icons/react';
 import { useAppState } from '../hooks/useAppState';
 import { useAuth } from '../hooks/useAuth';
 import clsx from 'clsx';
@@ -9,7 +9,6 @@ const NAV = [
   { id: 'investigation', label: 'Investigation', icon: MagnifyingGlass },
   { id: 'recovery', label: 'Recovery', icon: CurrencyInr },
   { id: 'timeline', label: 'AI Timeline', icon: Clock },
-  { id: 'simulate', label: 'Simulate', icon: Flask },
   { id: 'settings', label: 'Settings', icon: GearSix },
 ];
 

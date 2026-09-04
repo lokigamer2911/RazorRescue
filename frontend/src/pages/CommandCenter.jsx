@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { TrendUp, Shield, Brain, Lightning, Pulse, MagnifyingGlass, CurrencyInr, Play } from '@phosphor-icons/react';
+import { TrendUp, Shield, Brain, Lightning, Pulse, MagnifyingGlass, CurrencyInr } from '@phosphor-icons/react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { useAppState } from '../hooks/useAppState';
 import { formatCurrency } from '../utils/simulation';
@@ -7,7 +7,7 @@ import { animate, stagger } from 'animejs';
 import clsx from 'clsx';
 
 export default function CommandCenter({ setView }) {
-  const { analysis, insights, estimatedRecovery, autoDemoRunning, runAutoDemo } = useAppState();
+  const { analysis, insights, estimatedRecovery, dataLoading, syncError, refreshData } = useAppState();
   const cardsRef = useRef(null);
 
   // ALL data comes from analysis — zero hardcoded values
@@ -44,6 +44,33 @@ export default function CommandCenter({ setView }) {
     const c = animate(bars, { width: (el) => el.dataset.w || '0%', duration: 1000, delay: stagger(120, { start: 400 }), ease: 'outExpo' });
     return () => c.pause();
   }, [analysis]);
+
+  // Clean states: syncing (real data loading) or nothing connected yet.
+  if (dataLoading) {
+    return (
+      <div className="min-h-full flex flex-col items-center justify-center gap-3 bg-gray-50/50">
+        <div className="w-8 h-8 border-[3px] border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+        <p className="text-[12px] text-gray-400">Syncing your live payments…</p>
+      </div>
+    );
+  }
+
+  if (!analysis || !analysis.total) {
+    return (
+      <div className="min-h-full flex flex-col items-center justify-center gap-4 bg-gray-50/50 p-8">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <TrendUp weight="fill" className="w-6 h-6 text-gray-400" />
+        </div>
+        <div className="text-center max-w-[360px]">
+          <h3 className="text-[16px] font-bold text-gray-900 mb-1">{syncError ? 'Sync failed' : 'No payments yet'}</h3>
+          <p className="text-[12px] text-gray-400 leading-relaxed mb-4">
+            {syncError || 'We couldn\'t pull any transactions from your gateway. Sync again to analyse your live payments.'}
+          </p>
+        </div>
+        <button onClick={refreshData} className="px-5 py-2.5 btn-primary rounded-xl text-[12px] font-bold">Sync now</button>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-full bg-gray-50/50" ref={cardsRef}>
@@ -211,20 +238,6 @@ export default function CommandCenter({ setView }) {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
-        </div>
-
-        {/* Auto-Demo */}
-        <div className="card-clean p-6 mb-5 reveal-card" style={{ opacity: 0 }}>
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <h3 className="text-[15px] font-bold text-gray-900 mb-1">🎬 Watch the AI in Action</h3>
-              <p className="text-[12px] text-gray-400">Simulate a payment incident — the AI detects, investigates, and proposes recovery automatically</p>
-            </div>
-            <button onClick={runAutoDemo} disabled={autoDemoRunning}
-              className={clsx('px-6 py-3 rounded-xl text-[13px] font-bold transition-all flex items-center gap-2', autoDemoRunning ? 'bg-blue-100 text-blue-600 cursor-wait' : 'btn-primary')}>
-              {autoDemoRunning ? <><div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" /> AI Working...</> : <><Play weight="fill" className="w-4 h-4" /> Simulate Payment Incident</>}
-            </button>
           </div>
         </div>
 

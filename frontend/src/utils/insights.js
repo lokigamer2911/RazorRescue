@@ -87,7 +87,7 @@ export function peakLabel(w) {
 export function buildAnswerFromAnalysis(analysis, q) {
   const f = deriveInsights(analysis);
   if (f.total <= 0) {
-    return 'No transaction data is loaded, so I cannot give real figures yet. Run a payment-incident simulation or connect Razorpay data — then ask me again.';
+    return 'No payment data is loaded yet. Connect your payment gateway so I can analyse your live transactions — then ask me again.';
   }
   const lower = String(q).toLowerCase();
   const out = [];

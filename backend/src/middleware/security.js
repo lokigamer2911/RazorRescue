@@ -108,6 +108,11 @@ export const schemas = {
     riskLevel: { type: 'string', maxLength: 20 },
     status: { type: 'enum', values: ['pending', 'completed', 'failed'], default: 'pending' },
   },
+  gatewayConnect: {
+    provider: { type: 'enum', values: ['razorpay', 'stripe'], required: true },
+    keyId: { type: 'string', required: true, maxLength: 200 },
+    keySecret: { type: 'string', required: true, maxLength: 300 },
+  },
 };
 
 // Middleware factory: validate request body against a schema

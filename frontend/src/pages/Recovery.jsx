@@ -14,7 +14,7 @@ const MODES = [
 export default function Recovery() {
   const { analysis, insights, autopilotMode, setAutopilotMode, addTimelineEntry, recoveryData, setRecoveryData, recoveryActive, setRecoveryActive, saveCampaign, saveAction, activeIncident } = useAppState();
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('Ready');
+  const [status, setStatus] = useState(recoveryActive ? 'Running' : 'Ready');
   const ref = useRef(null);
 
   useEffect(() => {
@@ -26,31 +26,17 @@ export default function Recovery() {
   const launch = async () => {
     if (recoveryActive) return;
     setRecoveryActive(true);
-    setStatus('Initializing');
-    addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🚀', title: 'Recovery campaign started', desc: 'Multi-channel recovery', type: 'info' });
-    saveCampaign({ incidentId: activeIncident?.id || null, status: 'running', customersContacted: 0, paymentsRecovered: 0, amountRecovered: 0, recoveryRate: 0, startedAt: new Date().toISOString() });
-    saveAction({ type: 'recovery', title: 'Recovery campaign launched', description: 'Sending payment links', riskLevel: 'low', status: 'completed' });
+    setStatus('Running');
+    setProgress(0);
+    setRecoveryData({ customersContacted: 0, paymentsRecovered: 0, amountRecovered: 0, recoveryRate: 0, progress: 0 });
 
-    // Campaign targets derive from the LIVE analysis snapshot — never hardcoded.
+    // Real campaign record — targets derive from the LIVE analysis snapshot.
+    // No progress is invented: counts stay 0 until the execution engine reports
+    // actual deliveries and recoveries from the connected gateway.
     const total = Math.max(1, insights.eligible || Math.round((analysis?.failed || 0) * 0.8) || 1);
-    const amountTarget = Math.max(1, insights.recoverMid || Math.round((analysis?.revenueAtRisk || 0) * 0.7) || 1);
-    const recoveredTarget = Math.max(1, Math.round(total * 0.55));
-    let contacted = 0, recovered = 0, amount = 0;
-    for (let i = 0; i < 12; i++) {
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
-      contacted = Math.min(total, Math.round(total * (i + 1) / 12));
-      recovered = Math.min(recoveredTarget, recovered + Math.round(3 + Math.random() * Math.max(2, Math.round(recoveredTarget / 18))));
-      amount = Math.min(amountTarget, amount + Math.round(Math.max(300, amountTarget / 40) + Math.random() * Math.max(300, amountTarget / 16)));
-      const prog = Math.min(100, Math.round((contacted / total) * 100));
-      setProgress(prog);
-      setRecoveryData({ customersContacted: contacted, paymentsRecovered: recovered, amountRecovered: amount, recoveryRate: contacted > 0 ? Math.round((recovered / contacted) * 100) : 0, progress: prog });
-      if (i === 3) { setStatus('Running'); addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '📨', title: `${contacted} customers contacted`, desc: 'Links sent via SMS + Email', type: 'info' }); }
-      if (recovered > 40 && i === 6) addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '💰', title: `${formatCurrency(amount)} recovered`, desc: `${recovered} payments recovered`, type: 'success' });
-    }
-    setStatus('Complete');
-    addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🎉', title: `Complete — ${formatCurrency(amount)} recovered`, desc: `Rate: ${Math.round((recovered / total) * 100)}% of ${total.toLocaleString('en-IN')} contacted`, type: 'success' });
-    saveCampaign({ incidentId: activeIncident?.id || null, status: 'complete', customersContacted: contacted, paymentsRecovered: recovered, amountRecovered: amount, recoveryRate: Math.round((recovered / total) * 100), completedAt: new Date().toISOString() });
-    saveAction({ type: 'recovery-complete', title: `Recovery complete: ${formatCurrency(amount)}`, description: `${recovered}/${total} customers responded`, riskLevel: 'low', status: 'completed', revenueRecovered: amount });
+    addTimelineEntry({ time: new Date().toTimeString().slice(0, 5), icon: '🚀', title: 'Recovery campaign launched', desc: `Queued for ${total} eligible customers — awaiting execution`, type: 'info' });
+    saveCampaign({ incidentId: activeIncident?.id || null, status: 'running', customersContacted: 0, paymentsRecovered: 0, amountRecovered: 0, recoveryRate: 0, startedAt: new Date().toISOString() });
+    saveAction({ type: 'recovery', title: 'Recovery campaign launched', description: `Queued for ${total} eligible customers`, riskLevel: 'low', status: 'completed' });
   };
 
   const perms = {
@@ -91,7 +77,7 @@ export default function Recovery() {
         <button onClick={launch} disabled={recoveryActive && status === 'Running'}
           className={clsx('w-full py-4 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-2 btn-green', (recoveryActive && status === 'Running') && 'opacity-60 cursor-not-allowed')}>
           <RocketLaunch weight="fill" className="w-4 h-4" />
-          {status === 'Ready' ? 'Launch Recovery Campaign' : status === 'Complete' ? '✅ Complete' : `${status}...`}
+          {status === 'Ready' ? 'Launch Recovery Campaign' : 'Campaign active — awaiting execution'}
         </button>
       </div>
 

@@ -72,6 +72,16 @@ export async function initDB() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS gateway_connections (
+        user_id VARCHAR(128) PRIMARY KEY,
+        provider VARCHAR(20) NOT NULL,
+        key_id_enc TEXT NOT NULL,
+        key_secret_enc TEXT NOT NULL,
+        merchant_name VARCHAR(255),
+        last_sync_at TIMESTAMPTZ,
+        connected_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
       -- Seed default merchant if not exists
       INSERT INTO merchants (name, potential_revenue, total_transactions)
       SELECT 'CampusKart', 1000000, 10000
@@ -131,6 +141,34 @@ export async function getAuditLog(merchantId = 1, limit = 50) {
     [merchantId, limit]
   );
   return rows;
+}
+
+export async function saveGatewayConnection(userId, { provider, keyIdEnc, keySecretEnc, merchantName }) {
+  const { rows } = await pool.query(
+    `INSERT INTO gateway_connections (user_id, provider, key_id_enc, key_secret_enc, merchant_name, connected_at)
+     VALUES ($1,$2,$3,$4,$5, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET provider=$2, key_id_enc=$3, key_secret_enc=$4, merchant_name=$5, connected_at=NOW()`,
+    [userId, provider, keyIdEnc, keySecretEnc, merchantName]
+  );
+  return rows[0]?.id ?? userId;
+}
+
+export async function getGatewayConnection(userId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM gateway_connections WHERE user_id = $1`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+export async function deleteGatewayConnection(userId) {
+  await pool.query(`DELETE FROM gateway_connections WHERE user_id = $1`, [userId]);
+  return true;
+}
+
+export async function touchGatewaySync(userId) {
+  await pool.query(`UPDATE gateway_connections SET last_sync_at = NOW() WHERE user_id = $1`, [userId]);
+  return true;
 }
 
 export { pool };

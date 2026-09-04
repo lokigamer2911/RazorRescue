@@ -528,9 +528,9 @@ export default function Landing({ onLaunch, onLogin, onSignup, loggedIn = false 
       visual: <ApprovalVisual />,
     },
     {
-      kind: 'simulate', tint: FEATURE_TINTS.simulate, title: 'Simulate & plan ahead', tag: 'Test scenarios before real money is at stake',
-      desc: 'Run synthetic incidents and what-if projections to see exposure and prepare a recovery playbook before anything actually breaks.',
-      bullets: ['Synthetic incident simulator (outages, spikes, drop-offs)', 'What-if projections: “failures +10% → what happens?”', 'Pre-baked recovery playbooks per scenario'],
+      kind: 'simulate', tint: FEATURE_TINTS.simulate, title: 'Connect your live gateway', tag: 'Real payments, analysed in real time',
+      desc: 'Link your Razorpay or Stripe account with read-only access. Every analysis runs on your actual transactions — never sample data.',
+      bullets: ['One-click gateway connection with live credential validation', 'Keys encrypted at rest — read-only, nothing ever moves money', 'Fresh sync on demand, so numbers always match your dashboard'],
       visual: <BarsVisual />,
     },
   ];

@@ -1,17 +1,9 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { generateTransactions, analyseTransactions, generateIncident, formatCurrency } from '../utils/simulation';
+import { analyseTransactions, formatCurrency } from '../utils/simulation';
 import { deriveInsights } from '../utils/insights';
 import { api } from '../utils/api';
 
 const AppContext = createContext(null);
-
-const INITIAL_MERCHANT = {
-  name: 'CampusKart',
-  potentialRevenue: 1000000,
-  totalTransactions: 10000,
-};
-
-const INITIAL_TARGET_BANKS = ['BOB', 'UBI', 'INB'];
 
 const nowHM = () => new Date().toTimeString().slice(0, 5);
 
@@ -43,13 +35,11 @@ function buildSnapshot(merchant, analysis, incidents) {
   };
 }
 
-export function AppStateProvider({ children }) {
-  const [merchant, setMerchant] = useState(INITIAL_MERCHANT);
-  // One consistent dataset: analysis is ALWAYS derived from the same transactions.
-  const [transactions, setTransactions] = useState(() =>
-    generateTransactions(INITIAL_MERCHANT.totalTransactions, { targetBanks: INITIAL_TARGET_BANKS })
-  );
-  const [analysis, setAnalysis] = useState(() => analyseTransactions(transactions));
+export function AppStateProvider({ children, userId }) {
+  const [merchant, setMerchant] = useState({ name: 'My business', potentialRevenue: 0, totalTransactions: 0 });
+  // Real data only — populated by the payment-gateway sync. Never simulated.
+  const [transactions, setTransactions] = useState([]);
+  const [analysis, setAnalysis] = useState(null);
   const [incidents, setIncidents] = useState([]);
   const [activeIncident, setActiveIncident] = useState(null);
   const [recoveryActive, setRecoveryActive] = useState(false);
@@ -61,110 +51,86 @@ export function AppStateProvider({ children }) {
     progress: 0,
   });
   const [autopilotMode, setAutopilotMode] = useState('recommend');
-  const [autoDemoRunning, setAutoDemoRunning] = useState(false);
-  const [replayActive, setReplayActive] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [syncError, setSyncError] = useState('');
 
   // Derived facts — every number on the dashboard comes from this one source.
   const insights = useMemo(() => deriveInsights(analysis), [analysis]);
   const estimatedRecovery = insights.recoverMid;
 
-  // Seed timeline entries derived from the REAL initial analysis (no fake figures).
-  const [timeline, setTimeline] = useState(() => {
+  // Seed timeline entries derived from the REAL analysis (no fake figures).
+  const [timeline, setTimeline] = useState([]);
+  useEffect(() => {
     const f = deriveInsights(analysis);
-    if (f.total <= 0) return [];
+    if (!analysis || f.total <= 0 || timeline.length > 0) return;
     const t0 = new Date(Date.now() - 4 * 60000);
     const at = (mins) => new Date(t0.getTime() + mins * 60000).toTimeString().slice(0, 5);
     const banks = f.byBank.slice(0, 3).map((b) => b.name);
-    return [
-      { time: at(0), icon: '🔴', title: 'Failure rate anomaly detected', desc: `Failure rate climbed to ${f.failedRate.toFixed(1)}% across the transaction stream`, type: 'danger' },
-      { time: at(1), icon: '🔍', title: 'AI investigation started', desc: 'Pattern Detector + Risk Assessor analysing the snapshot', type: 'info' },
+    setTimeline([
+      { time: at(0), icon: '🔴', title: 'Failure rate anomaly detected', desc: `Failure rate at ${f.failedRate.toFixed(1)}% across the live payment stream`, type: 'danger' },
+      { time: at(1), icon: '🔍', title: 'AI investigation started', desc: 'Pattern Detector + Risk Assessor analysing the live snapshot', type: 'info' },
       { time: at(1), icon: '📊', title: `${f.failed.toLocaleString('en-IN')} failed transactions identified`, desc: `Concentrated in ${banks.join(', ')}`, type: 'info' },
       { time: at(2), icon: '💰', title: `${formatCurrency(f.revenueAtRisk)} revenue at risk calculated`, desc: 'Sum of all failed transaction amounts in the snapshot', type: 'danger' },
       { time: at(3), icon: '🧠', title: `Recovery strategy ready — est. ${formatCurrency(f.recoverLow)}–${formatCurrency(f.recoverHigh)}`, desc: 'Payment links with alternate methods, customer approval required', type: 'success' },
       { time: at(4), icon: '👤', title: 'Merchant approval requested', desc: `Waiting for ${merchant?.name || 'merchant'} to approve the recovery campaign`, type: 'warning' },
-    ];
-  });
+    ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis]);
 
   const addTimelineEntry = useCallback((entry) => {
     setTimeline((prev) => [...prev, entry]);
   }, []);
 
-  const runIncident = useCallback((type, severity, volume) => {
-    const incident = generateIncident(type, severity, volume);
-    setActiveIncident(incident);
-    setIncidents((prev) => [...prev, incident]);
-    const txns = generateTransactions(volume, {
-      targetBanks: incident.affectedBanks?.length ? incident.affectedBanks : INITIAL_TARGET_BANKS,
-    });
-    setTransactions(txns);
-    const nextAnalysis = analyseTransactions(txns);
-    setAnalysis(nextAnalysis);
-    const f = deriveInsights(nextAnalysis);
-    addTimelineEntry({
-      time: nowHM(),
-      icon: '🔬',
-      title: `Simulation: ${type.replace(/-/g, ' ')} incident`,
-      desc: `${f.failed.toLocaleString('en-IN')} failed in the new stream — ${formatCurrency(f.revenueAtRisk)} at risk`,
-      type: 'danger',
-    });
-    // Save to backend
-    api.saveIncident(incident).catch(() => {});
-    return incident;
-  }, [addTimelineEntry]);
+  // Sync real payments from the connected gateway and re-derive everything.
+  const refreshData = useCallback(async () => {
+    setDataLoading(true);
+    setSyncError('');
+    try {
+      const res = await api.gatewaySync();
+      if (!res) {
+        setSyncError('Could not reach the server. Check your connection.');
+        return;
+      }
+      if (!res.ok || !res.analysis) {
+        setSyncError(res?.error || 'Sync failed.');
+        return;
+      }
+      const txns = Array.isArray(res.transactions) ? res.transactions : [];
+      setTransactions(txns);
+      setAnalysis(res.analysis);
+      if (res.merchantName) setMerchant((m) => ({ ...m, name: res.merchantName, totalTransactions: res.analysis.total || 0 }));
+      setDataLoading(false);
+    } catch (err) {
+      setSyncError(err.message || 'Sync failed.');
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
 
-  // Auto-demo: full flow from detection to recovery — every figure data-derived.
-  const runAutoDemo = useCallback(async () => {
-    if (autoDemoRunning) return;
-    setAutoDemoRunning(true);
-
-    // Step 1: Generate incident (this also updates transactions + analysis).
-    const incident = runIncident('upi-failure', 'high', 10000);
-    addTimelineEntry({ time: nowHM(), icon: '🤖', title: 'AI auto-detected incident', desc: 'Continuous monitoring triggered the investigation network', type: 'info' });
-
-    await new Promise((r) => setTimeout(r, 2000));
-    addTimelineEntry({
-      time: nowHM(), icon: '🔍', title: 'Root cause identified',
-      desc: incident.affectedBanks.length ? `${incident.affectedBanks.join(', ')} endpoints affected — ${incident.rootCause.slice(0, 90)}` : incident.rootCause.slice(0, 120),
-      type: 'info',
-    });
-
-    await new Promise((r) => setTimeout(r, 1500));
-    const recoverable = Math.round(incident.revenueAtRisk * 0.7);
-    const eligible = Math.round(incident.affectedTransactions * 0.8);
-    addTimelineEntry({
-      time: nowHM(), icon: '💰', title: `${formatCurrency(recoverable)} recovery opportunity estimated`,
-      desc: `${eligible.toLocaleString('en-IN')} eligible customers identified (modelled 80% reachable)`, type: 'success',
-    });
-
-    await new Promise((r) => setTimeout(r, 1500));
-    addTimelineEntry({
-      time: nowHM(), icon: '🧠', title: `Recovery strategy ready — est. ${formatCurrency(Math.round(incident.expectedRecovery.low))}–${formatCurrency(Math.round(incident.expectedRecovery.high))}`,
-      desc: 'Payment links with alternate methods — LOW risk, merchant approval required', type: 'success',
-    });
-
-    await new Promise((r) => setTimeout(r, 1000));
-    addTimelineEntry({
-      time: nowHM(), icon: '👤', title: 'Merchant approval requested',
-      desc: `Waiting for ${merchant?.name || 'merchant'} to approve the recovery campaign`, type: 'warning',
-    });
-
-    setAutoDemoRunning(false);
-    return incident;
-  }, [autoDemoRunning, runIncident, addTimelineEntry, merchant]);
+  // Load real data on mount (per-user gateway).
+  useEffect(() => {
+    if (!userId) {
+      setDataLoading(false);
+      return;
+    }
+    refreshData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   // Push the current analysis snapshot to the backend RAG store (debounced).
   const firstPush = useRef(true);
   useEffect(() => {
+    if (!analysis || !analysis.total) return;
     const id = setTimeout(() => {
       const snapshot = buildSnapshot(merchant, analysis, incidents);
-      api.pushContext(snapshot).then((res) => {
+      api.pushContext(snapshot, userId).then((res) => {
         if (!res) return;
         firstPush.current = false;
         console.info('[RAG] snapshot synced:', res.storedAt ? 'ok' : 'n/a');
       });
     }, firstPush.current ? 500 : 800);
     return () => clearTimeout(id);
-  }, [analysis, incidents, merchant]);
+  }, [analysis, incidents, merchant, userId]);
 
   const saveCampaign = useCallback(async (campaign) => {
     try { await api.saveCampaign(campaign); } catch {}
@@ -175,6 +141,7 @@ export function AppStateProvider({ children }) {
   }, []);
 
   const value = {
+    userId,
     merchant, setMerchant,
     transactions, setTransactions,
     analysis, setAnalysis,
@@ -184,9 +151,8 @@ export function AppStateProvider({ children }) {
     recoveryActive, setRecoveryActive,
     recoveryData, setRecoveryData,
     autopilotMode, setAutopilotMode,
-    autoDemoRunning, runAutoDemo,
-    replayActive, setReplayActive,
-    runIncident, saveCampaign, saveAction,
+    dataLoading, syncError, refreshData,
+    saveCampaign, saveAction,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -196,4 +162,4 @@ export function useAppState() {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useAppState must be used within AppStateProvider');
   return ctx;
-}
+}
