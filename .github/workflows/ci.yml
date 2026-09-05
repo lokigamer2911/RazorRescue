@@ -42,7 +42,7 @@ jobs:
             const d = r.patternDetection;
             const pass =
               parseFloat(d.precision) >= 80 && parseFloat(d.recall) >= 85 &&
-              d.bankMatchRate === 100 && r.grounding.numberMismatchesVsRawData === 0 &&
+              parseFloat(d.bankMatchRate) === 100 && r.grounding.numberMismatchesVsRawData === 0 &&
               r.throughput.msFor100kTransactions < 50;
             if (!pass) { console.error("Eval gate failed:", JSON.stringify(d)); process.exit(1); }
             console.log("✅ Eval gate passed: precision", d.precision, "recall", d.recall, "bankMatch", d.bankMatchRate);
