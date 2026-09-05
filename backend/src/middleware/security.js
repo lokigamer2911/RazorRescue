@@ -77,16 +77,8 @@ export const schemas = {
     merchant: { type: 'object' },
     incidents: { type: 'object' },
   },
-  generateTransactions: {
-    count: { type: 'number', min: 100, max: 100000, default: 10000 },
-  },
   analyse: {
     transactions: { type: 'object', required: true },
-  },
-  generateIncident: {
-    type: { type: 'enum', values: ['upi-failure', 'checkout-abandon', 'subscription-fail', 'bank-outage', 'combined'], required: true },
-    severity: { type: 'enum', values: ['low', 'medium', 'high', 'critical'], required: true },
-    transactionCount: { type: 'number', min: 100, max: 100000, default: 10000 },
   },
   saveIncident: {
     type: { type: 'string', required: true, maxLength: 100 },

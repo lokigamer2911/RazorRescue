@@ -26,7 +26,7 @@ export async function orchestrate({ prompt, sessionId = 'default' }) {
       grounded: false,
       mode: 'engine',
       snapshotAt: null,
-      answer: 'No merchant data is loaded yet, so I cannot give you real figures.\n\n**To begin:** run a payment-incident simulation or connect your Razorpay data — my analysis network (Pattern Detector, Risk Assessor, Recovery Planner, Chief Analyst) will then analyse your actual transactions and answer with numbers that come from your data only.',
+      answer: 'No merchant data is loaded yet, so I cannot give you real figures.\n\n**To begin:** connect your Razorpay data — my analysis network (Pattern Detector, Risk Assessor, Recovery Planner, Chief Analyst) will then analyse your actual transactions and answer with numbers that come from your data only.',
       pipeline: [{ agent: 'router', name: ROSTER.router.name, model: 'built-in', status: 'done', summary: 'No data snapshot available — analysis deferred.' }],
       elapsedMs: Date.now() - startedAt,
     };

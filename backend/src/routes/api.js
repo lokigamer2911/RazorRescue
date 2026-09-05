@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { orchestrate } from '../services/orchestrator.js';
 import { storeSnapshot, getSnapshot, snapshotSummary } from '../services/contextStore.js';
-import { generateIncident, generateTransactions, analyseTransactions } from '../services/simulation.js';
+import { analyseTransactions } from '../services/simulation.js';
 import { validate, aiLimiter } from '../middleware/security.js';
 
 export const router = Router();
@@ -53,17 +53,6 @@ router.post('/consult', aiLimiter, validate('consult'), async (req, res) => {
   }
 });
 
-// Generate transaction data — validated count
-router.post('/generate-transactions', validate('generateTransactions'), (req, res) => {
-  try {
-    const { count, options } = req.body;
-    const transactions = generateTransactions(count || 10000, options || {});
-    res.json({ transactions, count: transactions.length });
-  } catch {
-    res.status(500).json({ error: 'Failed to generate transactions' });
-  }
-});
-
 // Analyse transactions
 router.post('/analyse', (req, res) => {
   try {
@@ -81,17 +70,6 @@ router.post('/analyse', (req, res) => {
   }
 });
 
-// Generate incident — validated
-router.post('/generate-incident', validate('generateIncident'), (req, res) => {
-  try {
-    const { type, severity, transactionCount } = req.body;
-    const incident = generateIncident(type, severity, transactionCount || 10000);
-    res.json(incident);
-  } catch {
-    res.status(500).json({ error: 'Failed to generate incident' });
-  }
-});
-
 // Available models — informational roster. ZERO-SPEND POLICY: all agents run on
 // OpenRouter :free endpoints only (never a paid model) unless ALLOW_PAID_MODELS=true.
 router.get('/models', (_req, res) => {
@@ -101,6 +79,6 @@ router.get('/models', (_req, res) => {
     { id: 'inclusionai/ling-3.0-flash-fin:free', name: 'Ling 3.0 Flash Finance (free)', role: 'Fast Risk Assessor', capability: 'Finance-tuned risk scoring used for risk intents.' },
     { id: 'minimax/minimax-m2.7:free', name: 'MiniMax M2.7 (free)', role: 'Fallback specialist', capability: 'Backup model if the primary free endpoint is rate-limited.' },
   ].concat(process.env.ALLOW_PAID_MODELS === 'true'
-    ? [{ id: '(paid tier)', name: 'Claude / GPT premium models', role: 'Optional demo tier', capability: 'Enabled only when ALLOW_PAID_MODELS=true is set deliberately.' }]
+    ? [{ id: '(paid tier)', name: 'Claude / GPT premium models', role: 'Optional premium tier', capability: 'Enabled only when ALLOW_PAID_MODELS=true is set deliberately.' }]
     : []));
 });

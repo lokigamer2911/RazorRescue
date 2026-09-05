@@ -12,6 +12,8 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
       # Comma-separated browser origins allowed to call this API.
       # Code default already includes https://razorrescue.vercel.app + localhost dev ports.
       - key: ALLOWED_ORIGINS
