@@ -146,6 +146,25 @@ with a small sample can randomly exceed the ELEVATED threshold. That is exactly
 why the agent never auto-acts — every flagged bank is routed to the exception
 list below.
 
+### Unit tests
+
+The deterministic core is covered by 34 unit tests (`backend/test/core.test.mjs`, run with `bun test`):
+
+- **Zero-spend policy** — every roster model and fallback is asserted `:free`;
+  paid models are refused unless deliberately enabled.
+- **Intent routing & agent planning** — each question class maps to the right
+  specialist set.
+- **Grounding integrity** — `renderDataset` cites only snapshot numbers; the
+  deterministic engines never emit figures absent from `deriveFacts`; empty
+  snapshots produce honest "no data" answers, never invented metrics.
+- **PII stripping** — customer identifiers never survive snapshot
+  normalization; values are clamped to sane bounds.
+- **Input validation** — XSS/HTML stripping, required fields, length caps,
+  number/enum bounds, and gateway provider whitelist.
+
+These run in CI on every push (`bun test`), so a regression in the AI core
+fails the build before it can reach production.
+
 ## Exception list policy
 
 When the agent is uncertain it does not guess; it lists the exception and sends

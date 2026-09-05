@@ -53,6 +53,14 @@ bun install && bun run dev   # serves http://localhost:5173, proxies /api → :3
 cd backend && bun scripts/evaluate.mjs
 ```
 
+**Run the unit test suite** (34 tests over the deterministic AI core — intent routing, grounding, PII stripping, validation):
+
+```bash
+cd backend && bun test
+```
+
+Both run in CI on every push.
+
 ## Features
 
 - **Gateway Connect** — Link your Razorpay/Stripe account with live credential validation; keys encrypted at rest; fresh sync on demand.

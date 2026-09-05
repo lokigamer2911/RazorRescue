@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "bun test",
+    "evaluate": "bun scripts/evaluate.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
