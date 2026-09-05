@@ -8,24 +8,30 @@ jobs:
   deploy-backend:
     name: Deploy Backend → Render
     runs-on: ubuntu-latest
+    env:
+      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
     steps:
       - uses: actions/checkout@v4
       - name: Trigger Render deploy
+        if: env.RENDER_DEPLOY_HOOK != ''
+        run: curl -X POST "$RENDER_DEPLOY_HOOK"
+      - name: Skip notice
+        if: env.RENDER_DEPLOY_HOOK == ''
         run: |
-          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
-            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
-            echo "✅ Render deploy triggered"
-          else
-            echo "⚠ No RENDER_DEPLOY_HOOK secret — skipping"
-          fi
+          echo "⚠ No RENDER_DEPLOY_HOOK secret — skipping Render deploy."
+          echo "   Create it from Render → your service → Settings → Deploy Hook."
 
   deploy-frontend:
     name: Deploy Frontend → Vercel
     runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Deploy to Vercel
-        if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
+        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
@@ -34,12 +40,10 @@ jobs:
           working-directory: frontend
           vercel-args: '--prod'
       - name: Skip notice
-        if: ${{ secrets.VERCEL_TOKEN == '' || secrets.VERCEL_ORG_ID == '' || secrets.VERCEL_PROJECT_ID == '' }}
+        if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''
         run: |
           echo "⚠ Skipping Vercel deploy — add these three repository secrets"
           echo "   (Settings → Secrets and variables → Actions):"
-          echo "   - VERCEL_TOKEN     (vercel.com/account/tokens)"
-          echo "   - VERCEL_ORG_ID    (vercel.com → your team → Settings → General → Team ID)"
+          echo "   - VERCEL_TOKEN      (vercel.com/account/tokens)"
+          echo "   - VERCEL_ORG_ID     (vercel.com → your team → Settings → General → Team ID)"
           echo "   - VERCEL_PROJECT_ID (vercel.com → your project → Settings → General → Project ID)"
-          echo "   Then re-run this job. Also set VITE_FIREBASE_* as env vars in the"
-          echo "   Vercel project (Settings → Environment Variables) for Production/Preview."
