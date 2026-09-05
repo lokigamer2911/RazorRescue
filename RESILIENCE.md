@@ -61,11 +61,40 @@ invented for show.
 - **Fix:** `/api/health` for liveness checks; the frontend degrades gracefully
   (shows an empty state instead of crashing) when the backend is unreachable.
 
+## 6. Cross-account access via a guessed uid (pre-submission security audit)
+
+- **Symptom:** a caller could read another merchant's analysis snapshot or run
+  an AI query over their payment data just by sending that user's id in the
+  request body or URL. The RAG context and AI query routes had no auth and
+  keyed their in-memory store on a **client-supplied** `sessionId`; the
+  database routes (`/stats`, `/audit`, `/incidents`, `/campaigns`,
+  `/actions`) were unauthenticated **and** all defaulted to one shared
+  merchant row.
+- **Root cause:** convenience over isolation — the storage key was taken from
+  the request instead of from the verified session, and the merchant schema
+  predated multi-user support (hardcoded `merchantId = 1`).
+- **Fix:** every data route now sits behind `requireAuth`, and the storage key
+  is derived **only** from the verified Firebase uid (`req.user.uid`) — any
+  client-supplied `sessionId` or URL id is ignored, so guessing another user's
+  uid cannot reach their data. Merchants are now per-user
+  (`getOrCreateMerchantId(uid)`); the shared seed row was removed. Verified:
+  unauthenticated calls to `/api/agent/context`, `/api/agent/query`, and
+  `/api/stats` all return `401` on the deployed backend.
+- **Prevention:** 5 dedicated security tests (`backend/test/security-scope.test.mjs`,
+  part of `bun test` in CI) assert that missing/invalid sessions are rejected
+  and that every DB function requires an explicit user id — so the isolation
+  contract can't silently regress.
+
 ## How we keep it honest
 
 - `backend/scripts/evaluate.mjs` — precision / recall / accuracy / throughput
   of the detection pipeline on labeled test data (deterministic seed, exact
   production functions).
-- GitHub Actions CI — backend `npm ci` + dependency audit + syntax checks,
-  frontend `bun install --frozen-lockfile` + audit + production build, a
-  secret scan that matches real key formats only, and CodeQL analysis.
+- `backend/test/*.test.mjs` — 39 unit tests covering the deterministic AI
+  core (intent routing, grounding, PII stripping, validation) **and** the
+  per-user security contract (401 on missing/invalid sessions, uid-keyed
+  storage, no shared merchant default).
+- GitHub Actions CI — backend `npm ci` + dependency audit + syntax checks +
+  `bun test`, frontend `bun install --frozen-lockfile` + audit + production
+  build, a secret scan that matches real key formats only, and CodeQL
+  analysis.
