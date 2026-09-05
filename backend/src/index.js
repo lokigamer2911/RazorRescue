@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { router as apiRouter } from './routes/api.js';
 import { router as gatewayRouter } from './routes/gateway.js';
 import { initDB, saveIncident, saveAIAction, saveRecoveryCampaign, getMerchantStats, getAuditLog } from './services/database.js';
+import { requireAuth } from './middleware/firebaseAuth.js';
 import { apiLimiter, validate } from './middleware/security.js';
 
 const app = express();
@@ -44,19 +45,21 @@ app.use('/api/agent', apiRouter);
 // Payment gateway routes (Firebase-auth protected)
 app.use('/api/gateway', gatewayRouter);
 
-// Database routes with validation
-app.get('/api/stats', async (_req, res) => {
+// Database routes — all scoped to the verified Firebase uid.
+app.use(['/api/stats', '/api/audit', '/api/incidents', '/api/campaigns', '/api/actions'], requireAuth);
+
+app.get('/api/stats', async (req, res) => {
   try {
-    const stats = await getMerchantStats();
+    const stats = await getMerchantStats(req.user.uid);
     res.json(stats);
   } catch {
     res.json({ total_at_risk: 0, total_recovered: 0, total_incidents: 0, total_campaigns: 0 });
   }
 });
 
-app.get('/api/audit', async (_req, res) => {
+app.get('/api/audit', async (req, res) => {
   try {
-    const log = await getAuditLog();
+    const log = await getAuditLog(req.user.uid);
     res.json(log);
   } catch {
     res.json([]);
@@ -65,8 +68,8 @@ app.get('/api/audit', async (_req, res) => {
 
 app.post('/api/incidents', validate('saveIncident'), async (req, res) => {
   try {
-    const id = await saveIncident(req.body);
-    await saveAIAction({ incidentId: id, type: 'detection', title: `Incident detected: ${req.body.type}`, description: req.body.rootCause, riskLevel: req.body.severity, status: 'completed' });
+    const id = await saveIncident(req.body, req.user.uid);
+    await saveAIAction({ incidentId: id, type: 'detection', title: `Incident detected: ${req.body.type}`, description: req.body.rootCause, riskLevel: req.body.severity, status: 'completed' }, req.user.uid);
     res.json({ id });
   } catch {
     res.status(500).json({ error: 'Failed to save incident' });
@@ -75,7 +78,7 @@ app.post('/api/incidents', validate('saveIncident'), async (req, res) => {
 
 app.post('/api/campaigns', validate('saveCampaign'), async (req, res) => {
   try {
-    const id = await saveRecoveryCampaign(req.body);
+    const id = await saveRecoveryCampaign(req.body, req.user.uid);
     res.json({ id });
   } catch {
     res.status(500).json({ error: 'Failed to save campaign' });
@@ -84,7 +87,7 @@ app.post('/api/campaigns', validate('saveCampaign'), async (req, res) => {
 
 app.post('/api/actions', validate('saveAction'), async (req, res) => {
   try {
-    const id = await saveAIAction(req.body);
+    const id = await saveAIAction(req.body, req.user.uid);
     res.json({ id });
   } catch {
     res.status(500).json({ error: 'Failed to save action' });

@@ -14,11 +14,15 @@ export async function initDB() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS merchants (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL DEFAULT 'CampusKart',
-        potential_revenue BIGINT DEFAULT 1000000,
-        total_transactions INT DEFAULT 10000,
+        user_id VARCHAR(128) UNIQUE,
+        name VARCHAR(255) NOT NULL DEFAULT 'My business',
+        potential_revenue BIGINT DEFAULT 0,
+        total_transactions INT DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- Backfill: no shared demo merchant; every row is owned by one user.
+      DELETE FROM merchants WHERE user_id IS NULL;
 
       CREATE TABLE IF NOT EXISTS incidents (
         id SERIAL PRIMARY KEY,
@@ -82,10 +86,6 @@ export async function initDB() {
         connected_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      -- Seed default merchant if not exists
-      INSERT INTO merchants (name, potential_revenue, total_transactions)
-      SELECT 'CampusKart', 1000000, 10000
-      WHERE NOT EXISTS (SELECT 1 FROM merchants WHERE name = 'CampusKart');
     `);
     console.log('✓ Database initialized');
   } finally {
@@ -93,7 +93,23 @@ export async function initDB() {
   }
 }
 
-export async function saveIncident(incident, merchantId = 1) {
+// Resolve (or create) the merchant row owned by a user. Every merchant is
+// scoped to exactly one verified uid — there is no shared "default" merchant.
+// Callers pass userId (the Firebase uid); all data reads/writes are then
+// isolated per account.
+export async function getOrCreateMerchantId(userId) {
+  const uid = String(userId);
+  const { rows } = await pool.query(
+    `INSERT INTO merchants (user_id, name) VALUES ($1, 'My business')
+     ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id
+     RETURNING id`,
+    [uid]
+  );
+  return rows[0].id;
+}
+
+export async function saveIncident(incident, userId) {
+  const merchantId = await getOrCreateMerchantId(userId);
   const { rows } = await pool.query(
     `INSERT INTO incidents (merchant_id, type, severity, affected_banks, affected_transactions, revenue_at_risk, peak_window, root_cause, ai_confidence, recovery_strategy, expected_recovery_low, expected_recovery_high)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
@@ -102,7 +118,8 @@ export async function saveIncident(incident, merchantId = 1) {
   return rows[0].id;
 }
 
-export async function saveAIAction(action, merchantId = 1) {
+export async function saveAIAction(action, userId) {
+  const merchantId = await getOrCreateMerchantId(userId);
   const { rows } = await pool.query(
     `INSERT INTO ai_actions (merchant_id, incident_id, action_type, title, description, risk_level, status, revenue_recovered)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
@@ -111,7 +128,8 @@ export async function saveAIAction(action, merchantId = 1) {
   return rows[0].id;
 }
 
-export async function saveRecoveryCampaign(campaign, merchantId = 1) {
+export async function saveRecoveryCampaign(campaign, userId) {
+  const merchantId = await getOrCreateMerchantId(userId);
   const { rows } = await pool.query(
     `INSERT INTO recovery_campaigns (merchant_id, incident_id, status, customers_contacted, payments_recovered, amount_recovered, recovery_rate, started_at, completed_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
@@ -120,7 +138,8 @@ export async function saveRecoveryCampaign(campaign, merchantId = 1) {
   return rows[0].id;
 }
 
-export async function getMerchantStats(merchantId = 1) {
+export async function getMerchantStats(userId) {
+  const merchantId = await getOrCreateMerchantId(userId);
   const { rows } = await pool.query(
     `SELECT 
        COALESCE(SUM(revenue_at_risk), 0) as total_at_risk,
@@ -135,7 +154,8 @@ export async function getMerchantStats(merchantId = 1) {
   return rows[0];
 }
 
-export async function getAuditLog(merchantId = 1, limit = 50) {
+export async function getAuditLog(userId, limit = 50) {
+  const merchantId = await getOrCreateMerchantId(userId);
   const { rows } = await pool.query(
     `SELECT * FROM audit_log WHERE merchant_id = $1 ORDER BY created_at DESC LIMIT $2`,
     [merchantId, limit]

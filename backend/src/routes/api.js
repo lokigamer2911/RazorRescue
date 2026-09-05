@@ -2,18 +2,26 @@ import { Router } from 'express';
 import { orchestrate } from '../services/orchestrator.js';
 import { storeSnapshot, getSnapshot, snapshotSummary } from '../services/contextStore.js';
 import { analyseTransactions } from '../services/simulation.js';
+import { requireAuth } from '../middleware/firebaseAuth.js';
 import { validate, aiLimiter } from '../middleware/security.js';
 
 export const router = Router();
 
+// ─── SECURITY: all RAG/AI routes are per-user ─────────────────────────────
+// The snapshot store, AI queries and grounding reads are scoped to the
+// VERIFIED Firebase uid — never to a client-supplied sessionId. This makes
+// cross-account access impossible: even if a caller changes the URL or body
+// to another user's id, the server derives the key from the validated token.
+router.use(requireAuth);
+
 // ─── RAG context: the dashboard pushes its live analysis snapshot here ──────
 router.post('/context', validate('context'), (req, res) => {
   try {
-    const { sessionId, analysis, merchant, incidents } = req.body;
+    const { analysis, merchant, incidents } = req.body;
     if (!analysis || !Number.isFinite(analysis.total) || analysis.total <= 0) {
       return res.status(400).json({ error: 'analysis must include a positive numeric total', details: ['analysis.total'] });
     }
-    const stored = storeSnapshot(sessionId, { analysis, merchant, incidents });
+    const stored = storeSnapshot(req.user.uid, { analysis, merchant, incidents });
     res.json({ ok: true, ...stored });
   } catch (err) {
     console.error('[Context]', err.message);
@@ -23,8 +31,7 @@ router.post('/context', validate('context'), (req, res) => {
 
 // Read back the stored snapshot summary (used by the UI grounding indicator).
 router.get('/context', (req, res) => {
-  const sessionId = String(req.query.sessionId || 'default').slice(0, 64);
-  const summary = snapshotSummary(getSnapshot(sessionId));
+  const summary = snapshotSummary(getSnapshot(req.user.uid));
   if (!summary) return res.status(404).json({ error: 'No context snapshot stored' });
   res.json({ grounded: true, snapshot: summary });
 });
@@ -32,8 +39,8 @@ router.get('/context', (req, res) => {
 // ─── Multi-agent query: Router → specialists → Chief Analyst ───────────────
 router.post('/query', aiLimiter, validate('query'), async (req, res) => {
   try {
-    const { prompt, sessionId } = req.body;
-    const result = await orchestrate({ prompt, sessionId });
+    const { prompt } = req.body;
+    const result = await orchestrate({ prompt, sessionId: req.user.uid });
     res.json(result);
   } catch (err) {
     console.error('[AI Query]', err.message);
@@ -44,8 +51,8 @@ router.post('/query', aiLimiter, validate('query'), async (req, res) => {
 // ─── Legacy single-model consult — now routed through the orchestrator ─────
 router.post('/consult', aiLimiter, validate('consult'), async (req, res) => {
   try {
-    const { prompt, sessionId } = req.body;
-    const result = await orchestrate({ prompt, sessionId });
+    const { prompt } = req.body;
+    const result = await orchestrate({ prompt, sessionId: req.user.uid });
     res.json(result);
   } catch (err) {
     console.error('[AI Consult]', err.message);
