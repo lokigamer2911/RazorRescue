@@ -96,3 +96,70 @@ answers from its deterministic engine (instant, zero cost, still grounded).
 | `POST /api/agent/query` | Multi-agent orchestrated answer + pipeline trace. |
 | `POST /api/agent/consult` | Legacy alias routed through the same orchestrator. |
 | `GET /api/agent/models` | Agent roster with capabilities. |
+
+## Why this stack (system design reasoning)
+
+- **In-memory RAG context store instead of a vector database.** The merchant's
+  dataset is small (≤ 1,000 synced payments, pushed as aggregates — customer PII
+  stripped) and retrieval is exact, not semantic. A vector store would add
+  latency and non-determinism with zero accuracy gain for finance-grounded
+  answers; the snapshot store guarantees the exact numbers on the dashboard are
+  the exact numbers in every AI answer.
+- **Multi-agent orchestration instead of one mega-prompt.** Separation of
+  concerns (pattern → risk → recovery), parallel specialist execution, and a
+  chief analyst that cross-checks specialist outputs before synthesising. Each
+  agent has one job and hard grounding rules, which is easier to audit, prompt-
+  maintain and test than a single giant prompt.
+- **OpenRouter over a single provider.** One integration, many `:free`
+  endpoints, per-agent fallback chains, so rate limits degrade to the next free
+  model or the deterministic engine — never to a paid call (hard guard
+  `isModelSpendFree`).
+- **Deterministic engines as the resilience layer.** If every free endpoint is
+  rate-limited or unavailable, the same agent computes its answer from the
+  snapshot directly (`mode: engine`). Zero cost, instant, and provably grounded:
+  every number is recomputable from the raw data.
+- **Express + Neon (PostgreSQL) + Firebase Auth.** The backend stays small and
+  auditable (helmet, cors, rate-limit, zod, pg only); Neon is a managed Postgres
+  for campaign/audit records; Firebase owns identities so no password ever
+  touches our database.
+
+## Evaluation & honest metrics
+
+`backend/scripts/evaluate.mjs` runs the exact production pipeline
+(`analyseTransactions → deriveFacts`) over labeled test fixtures — 12 injected
+outage patterns + 8 clean datasets, 5,000 transactions each, deterministic seed —
+and reports (reproduce with `bun scripts/evaluate.mjs`):
+
+| Metric | Result |
+|---|---|
+| Pattern-detection precision | 84.6% |
+| Pattern-detection recall | 91.7% |
+| F1 | 0.88 |
+| Bank match rate (injected bank surfaced as worst) | 100% |
+| Mean peak-window error | 0.82 h |
+| False-positive rate on clean data | 25% |
+| Grounding mismatches vs raw data | 0 — derived numbers always equal independent recomputation |
+| Throughput | 0.7 ms per 5k transactions; 4.7 ms per 100k |
+
+The false positives on clean data are the honest cost of sensitivity: a bank
+with a small sample can randomly exceed the ELEVATED threshold. That is exactly
+why the agent never auto-acts — every flagged bank is routed to the exception
+list below.
+
+## Exception list policy
+
+When the agent is uncertain it does not guess; it lists the exception and sends
+it to human review (surfaced in the UI as “Edge Cases — Flagged for Human
+Review”):
+
+1. **Insufficient sample** — a flagged bank with fewer than 30 transactions:
+   attribution unreliable, hold before targeting recovery.
+2. **No peak clarity** — failures spread across the day (peak share < 30%):
+   recommend a broad retry policy, not a timed campaign.
+3. **Unknown decline codes** — reason strings outside the taxonomy: no
+   automated recovery can be attached; escalate to taxonomy/PSP investigation.
+4. **Low confidence** — derived confidence below 70%: no automated recovery
+   plan is drafted.
+
+All rules are deterministic and derived from the real snapshot — the app never
+fabricates an exception to fill space.

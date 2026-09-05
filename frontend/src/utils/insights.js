@@ -131,3 +131,69 @@ export function buildAnswerFromAnalysis(analysis, q) {
   out.push(`Confidence (data-derived): **${f.confidence}%**.`);
   return out.join('\n');
 }
+
+// ─── Edge cases the agent flags for HUMAN REVIEW instead of auto-acting ─────
+// Every rule is deterministic and derived from the real analysis snapshot —
+// nothing here is invented. These are the honest exceptions a revenue-recovery
+// agent must surface rather than guess its way around (see AI_ARCHITECTURE.md).
+const KNOWN_DECLINE_CODES = ['Bank timeout', 'Insufficient funds', 'UPI PIN incorrect', 'Network error', 'Bank declined', 'Session expired', 'Technical error'];
+
+export function deriveExceptionList(analysis, insights) {
+  const list = [];
+  if (!analysis || !analysis.total || analysis.total <= 0) return list;
+  const f = insights || deriveInsights(analysis);
+  const byBank = analysis.byBank || [];
+  const topFailed = analysis.topFailed || [];
+
+  // 1. Sample too small for reliable attribution.
+  byBank
+    .filter((b) => b.total > 0 && b.total < 30 && b.failed > 0)
+    .slice(0, 2)
+    .forEach((b) => list.push({
+      id: 'insufficient-sample',
+      severity: 'warning',
+      title: `Attribution unreliable — ${b.name}`,
+      detail: `Only ${b.total} transactions from ${b.name} (${b.failed} failed) — too small a sample to confirm a routing issue.`, 
+      action: 'Hold for human review before any recovery is targeted at this bank.',
+    }));
+
+  // 2. Failures spread across the day — no single window to target.
+  if (f.failed > 30 && f.peakWindow && f.peakShare < 30) {
+    list.push({
+      id: 'no-peak-clarity',
+      severity: 'warning',
+      title: 'No clear peak window',
+      detail: `${f.failed} failures are spread across the day (the peak window holds only ${f.peakShare.toFixed(0)}%). A time-window blast would miss most affected customers.`,
+      action: 'Recommend a broad retry policy reviewed by a human, not a timed campaign.',
+    });
+  }
+
+  // 3. Decline codes outside the known taxonomy.
+  const unknown = {};
+  topFailed.forEach((t) => {
+    if (t.failureReason && !KNOWN_DECLINE_CODES.includes(t.failureReason)) unknown[t.failureReason] = (unknown[t.failureReason] || 0) + 1;
+  });
+  Object.entries(unknown)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .forEach(([code, n]) => list.push({
+      id: 'unknown-decline-code',
+      severity: 'info',
+      title: `Unrecognised decline code: “${code}”`,
+      detail: `Seen ${n} time(s) in the failed sample — not in the reason taxonomy, so no automated recovery can be attached to it.`,
+      action: 'Flagged for human review; extend the taxonomy or investigate the PSP mapping.',
+    }));
+
+  // 4. Low detection confidence → human gate, no auto-plan.
+  if (f.confidence < 70) {
+    list.push({
+      id: 'low-confidence',
+      severity: 'info',
+      title: `Detection confidence below threshold (${f.confidence}%)`,
+      detail: 'Signals are weak or conflicting in this snapshot.',
+      action: 'Escalated to human review — the agent will not draft an automated recovery plan.',
+    });
+  }
+
+  return list;
+}

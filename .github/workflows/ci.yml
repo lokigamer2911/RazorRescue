@@ -28,6 +28,7 @@ jobs:
       - run: node --check src/services/database.js
       - run: node --check src/services/simulation.js
       - run: node --check src/middleware/security.js
+      - run: node --check scripts/evaluate.mjs
 
   frontend:
     name: Frontend — Install, Build, Audit

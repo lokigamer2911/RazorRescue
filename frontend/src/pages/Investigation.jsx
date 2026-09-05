@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { MagnifyingGlass, Shield, Lightning } from '@phosphor-icons/react';
+import { useEffect, useMemo, useRef } from 'react';
+import { MagnifyingGlass, Shield, Lightning, Warning, Info } from '@phosphor-icons/react';
 import { useAppState } from '../hooks/useAppState';
 import { formatCurrency } from '../utils/simulation';
+import { deriveExceptionList } from '../utils/insights';
 import { animate, stagger } from 'animejs';
 import clsx from 'clsx';
 
@@ -12,6 +13,7 @@ export default function Investigation() {
   const topFailed = (analysis?.topFailed || []).slice(0, 8);
   const totalFailed = analysis?.failed || 0;
   const totalTxns = analysis?.total || 1;
+  const exceptions = useMemo(() => deriveExceptionList(analysis, insights), [analysis, insights]);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -89,6 +91,36 @@ export default function Investigation() {
             {' '}Diagnosis confidence is derived from failure concentration and peak clarity. <span className="text-emerald-600 font-semibold">Confidence: {insights.confidence}%</span>
           </p>
         </div>
+      </div>
+
+      {/* Edge Cases — Flagged for Human Review */}
+      <div className="card-clean p-6 mb-5 rc" style={{ opacity: 0 }}>
+        <div className="flex items-center justify-between mb-5">
+          <span className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Edge Cases — Flagged for Human Review</span>
+          <span className="badge-sm badge-amber">{exceptions.length} open</span>
+        </div>
+        {exceptions.length === 0 ? (
+          <p className="text-[12.5px] text-gray-500">No edge cases in this snapshot — every signal is strong enough to act on with confidence.</p>
+        ) : (
+          <div className="space-y-3">
+            {exceptions.map((e) => (
+              <div key={`${e.id}-${e.title}`} className="flex gap-3 p-4 rounded-xl border border-amber-100 bg-amber-50/60">
+                <div className="flex-shrink-0">
+                  {e.severity === 'warning'
+                    ? <Warning weight="fill" className="w-4 h-4 text-amber-500 mt-0.5" />
+                    : <Info weight="fill" className="w-4 h-4 text-blue-500 mt-0.5" />}
+                </div>
+                <div>
+                  <p className="text-[12.5px] font-semibold text-gray-900">{e.title}</p>
+                  <p className="text-[12px] text-gray-600 mt-0.5 leading-relaxed">{e.detail}</p>
+                  <p className="text-[11px] text-amber-700 mt-1.5 flex items-center gap-1.5">
+                    <Shield weight="fill" className="w-3 h-3 flex-shrink-0" /> {e.action}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Customers */}
