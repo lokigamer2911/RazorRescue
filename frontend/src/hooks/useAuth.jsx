@@ -97,6 +97,10 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
   const [newGooglePending, setNewGooglePending] = useState(false);
+  // Bumped whenever the signed-in user is refreshed, so consumers re-render
+  // against the SAME Firebase User instance (spreading a User strips its
+  // methods — e.g. getIdToken — and white-screens the app).
+  const [, setUserTick] = useState(0);
   const confirmationRef = useRef(null); // pending phone OTP confirmation
 
   useEffect(() => {
@@ -115,7 +119,8 @@ export function AuthProvider({ children }) {
   const refreshUser = useCallback(async () => {
     if (!auth?.currentUser) return null;
     await reload(auth.currentUser);
-    setUser({ ...auth.currentUser });
+    setUser(auth.currentUser);
+    setUserTick((t) => t + 1);
     return auth.currentUser;
   }, []);
 
@@ -230,7 +235,8 @@ export function AuthProvider({ children }) {
     const pending = confirmationRef.current;
     if (!pending) throw new Error('Send the code first.');
     const result = await pending.confirmation.confirm(code.trim());
-    setUser({ ...result.user });
+    setUser(result.user);
+    setUserTick((t) => t + 1);
     return result.user;
   }, []);
 
@@ -254,7 +260,8 @@ export function AuthProvider({ children }) {
     window.history.replaceState({}, '', window.location.pathname);
     if (auth.currentUser) {
       await reload(auth.currentUser);
-      setUser({ ...auth.currentUser });
+      setUser(auth.currentUser);
+      setUserTick((t) => t + 1);
     }
     return true;
   }, []);
