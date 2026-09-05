@@ -4,7 +4,7 @@
 
 RazorRescue connects to a merchant's **real Razorpay (or Stripe) account**, watches actual payments, finds where revenue is leaking, explains why with a multi-agent AI pipeline, and drafts safe recovery campaigns that the merchant must approve. **No demo data, no simulated analytics — every number is computed from the merchant's real transactions.**
 
-**Try it live:** [razorrescue.vercel.app](https://razorrescue.vercel.app) · [backend health](https://razorrescue-api.onrender.com/api/health)
+**Try it live:** [razorrescue.vercel.app](https://razorrescue.vercel.app) · [backend health](https://razorrescue.onrender.com/api/health)
 
 ## The problem
 
